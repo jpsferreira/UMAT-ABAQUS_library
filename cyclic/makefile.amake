@@ -1,0 +1,122 @@
+
+#
+# Absoft Developer Tools Interface requires use of this makefile.
+#
+MKDIR=mkdir -p 
+RMDIR=rm -rf 
+
+#
+# Variables for the compiler(s) and linker
+#
+ABSOFT_F95=f95
+ABSOFT_F77=f95
+VAST_PREPROCESSOR=vastfp
+RC=Rez
+GCC=gcc
+MAKE=amake2
+ABSOFT_F95_LINKER=f95
+DUMMY=
+
+#
+# Flags
+#
+ABSOFT_F95_FLAGS=  -g -m64 -stack:1f40000
+ABSOFT_F77_FLAGS=  -f77_compat -g -m64 -stack:1f40000
+RC_FLAGS=
+GCC_FLAGS= -g -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.15.sdk -m64
+MAKE_FLAGS= -k
+ABSOFT_F95_LINKER_FLAGS=-IPA:debug=on -IPA:source_pu_order=on        -osxtarget=10.15 -m64 -stack:1f40000 -g
+
+#
+# Name of the executable
+#
+TARGET=cyclic
+OUTDIR=.
+OBJDIR=./Debug
+
+#
+# Files for this executable
+#
+VAST_PREPROCESSOR_FILES=
+ABSOFT_F95_FILES="cyclic.f90"
+ABSOFT_F77_FILES="umat_gho.for" "resetdfgr.for"
+GCC_FILES=
+ABSOFT_F95_LINKER_FILES=
+RC_FILES=
+MAKE_FILES=
+
+#
+# Rules and dependencies for the executable
+#
+SRCFILES=$(ABSOFT_F95_FILES) $(ABSOFT_F77_FILES)
+OBJFILES="$(OBJDIR)/cyclic.o" "$(OBJDIR)/umat_gho.o" "$(OBJDIR)/resetdfgr.o"
+all: "$(OBJDIR)" "$(OUTDIR)/$(TARGET)"
+	
+
+"$(OUTDIR)/$(TARGET)":  $(OBJFILES) $(ABSOFT_F95_LINKER_FILES) $(MODFILES)
+	$(ABSOFT_F95_LINKER)  $(LPATHS) $(OBJFILES) $(ABSOFT_F95_LINKER_FILES) $(LIBS) -o "$(OUTDIR)/$(TARGET)" $(ABSOFT_F95_LINKER_FLAGS)
+
+
+
+"$(OBJDIR)/cyclic.o": "cyclic.f90"
+	$(ABSOFT_F95) -c -nowdir -YLOOP_ANALYZER -LNO:simd_verbose=on -LNO:apo_verbose=on -CG:filetable_verbose=on $(ABSOFT_F95_FLAGS) -o "$(OBJDIR)/cyclic.o" "cyclic.f90"
+
+"$(OBJDIR)/umat_gho.o": "umat_gho.for"
+	$(ABSOFT_F77) -c -nowdir -YLOOP_ANALYZER -LNO:simd_verbose=on -LNO:apo_verbose=on -CG:filetable_verbose=on $(ABSOFT_F77_FLAGS) -o "$(OBJDIR)/umat_gho.o" "umat_gho.for"
+
+"$(OBJDIR)/resetdfgr.o": "resetdfgr.for"
+	$(ABSOFT_F77) -c -nowdir -YLOOP_ANALYZER -LNO:simd_verbose=on -LNO:apo_verbose=on -CG:filetable_verbose=on $(ABSOFT_F77_FLAGS) -o "$(OBJDIR)/resetdfgr.o" "resetdfgr.for"
+
+"$(OBJDIR)":
+	$(MKDIR) "$(OBJDIR)"
+#
+# Clean Rules
+#
+clean:
+	$(RMDIR) "$(OBJDIR)"
+	$(RMDIR) "$(TARGET)"
+	rm -f makefile.amake
+	rm -f makefile.amake.bk
+	rm -f makefile_base.amake
+
+#
+# Define necessary macros for dependency scanning.
+#
+MKDEP=amakedepend
+MKDEP_FLAGS= -quiet "-pre$(OBJDIR)/" -Y -modInfo -errdel -f90 -f makefile.amake
+#
+# Generate dependencies for the project
+#
+ScanAll: "$(OUTDIR)" "$(OBJDIR)" MakeDepsAll
+
+#
+# Scan for all F77/F95, and c/c++ dependencies
+#
+MakeDepsAll:
+	$(MKDEP) -quiet "-pre./Debug/" -Y -modInfo -errdel -f90 -f makefile.amake -a -info   -g -m64 -stack:1f40000 -info "cyclic.f90" "umat_gho.for" "resetdfgr.for" 
+# DO NOT DELETE THIS LINE - makedepend depends upon it.
+
+
+
+
+"./Debug/cyclic.o": "ABA_PARAM.INC" "PARAM_UMAT.INC"
+
+"./Debug/umat_gho.o": "aba_param.inc" "PARAM_UMAT.INC" "PARAM_UMAT.INC"
+"./Debug/umat_gho.o": "PARAM_UMAT.INC" "PARAM_UMAT.INC" "PARAM_UMAT.INC"
+"./Debug/umat_gho.o": "PARAM_UMAT.INC" "PARAM_UMAT.INC" "PARAM_UMAT.INC"
+"./Debug/umat_gho.o": "PARAM_UMAT.INC" "PARAM_UMAT.INC" "PARAM_UMAT.INC"
+"./Debug/umat_gho.o": "PARAM_UMAT.INC" "PARAM_UMAT.INC" "PARAM_UMAT.INC"
+"./Debug/umat_gho.o": "PARAM_UMAT.INC" "PARAM_UMAT.INC" "PARAM_UMAT.INC"
+"./Debug/umat_gho.o": "PARAM_UMAT.INC" "PARAM_UMAT.INC" "PARAM_UMAT.INC"
+"./Debug/umat_gho.o": "PARAM_UMAT.INC" "PARAM_UMAT.INC" "PARAM_UMAT.INC"
+"./Debug/umat_gho.o": "PARAM_UMAT.INC" "PARAM_UMAT.INC" "PARAM_UMAT.INC"
+"./Debug/umat_gho.o": "PARAM_UMAT.INC" "PARAM_UMAT.INC" "PARAM_UMAT.INC"
+"./Debug/umat_gho.o": "PARAM_UMAT.INC" "PARAM_UMAT.INC" "PARAM_UMAT.INC"
+"./Debug/umat_gho.o": "PARAM_UMAT.INC" "PARAM_UMAT.INC" "PARAM_UMAT.INC"
+"./Debug/umat_gho.o": "PARAM_UMAT.INC" "PARAM_UMAT.INC" "PARAM_UMAT.INC"
+"./Debug/umat_gho.o": "PARAM_UMAT.INC" "PARAM_UMAT.INC" "PARAM_UMAT.INC"
+"./Debug/umat_gho.o": "PARAM_UMAT.INC" "PARAM_UMAT.INC" "PARAM_UMAT.INC"
+"./Debug/umat_gho.o": "ABA_PARAM.INC" "PARAM_UMAT.INC" "PARAM_UMAT.INC"
+"./Debug/umat_gho.o": "PARAM_UMAT.INC"
+
+"./Debug/resetdfgr.o": "PARAM_UMAT.INC"

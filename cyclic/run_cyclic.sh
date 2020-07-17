@@ -1,0 +1,2 @@
+./cyclic &&
+open cyclic.eps
