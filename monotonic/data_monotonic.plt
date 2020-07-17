@@ -16,7 +16,7 @@ ss="./stress_curves/s_shear.out"
 
 set origin 0.0,0.5
 set xlabel "Stretch"
-set ylabel "Normal Stress"
+set ylabel "Normal Cauchy Stress"
 plot m using 2:3 with lines title 'uniaxial', \
      p using 2:3 with lines title 'equibiaxial'
 set origin 0.0,0.0
