@@ -16,13 +16,18 @@ DRPLDE(NTENS),STRAN(NTENS),DSTRAN(NTENS),TIME(2),PREDEF(1),DPRED(1),            
 PROPS(NPROPS),COORDS(3),DROT(3,3),DFGRD0(3,3),DFGRD1(3,3)
 
 CHARACTER*8 filename
-CHARACTER(*), PARAMETER :: uni_path = './stress_curves/freq_sweep/uniaxial/'
-CHARACTER(*), PARAMETER :: bi_path = './stress_curves/freq_sweep/equibiaxial/'
-CHARACTER(*), PARAMETER :: sh_path = './stress_curves/freq_sweep/shear/'
-CHARACTER(*), PARAMETER :: ssh_path = './stress_curves/freq_sweep/sshear/'
-
+CHARACTER(*), PARAMETER :: uni_f_path = './stress_curves/freq_sweep/uniaxial/'
+CHARACTER(*), PARAMETER :: bi_f_path = './stress_curves/freq_sweep/equibiaxial/'
+CHARACTER(*), PARAMETER :: sh_f_path = './stress_curves/freq_sweep/shear/'
+CHARACTER(*), PARAMETER :: ssh_f_path = './stress_curves/freq_sweep/sshear/'
+!
+CHARACTER(*), PARAMETER :: uni_a_path = './stress_curves/amp_sweep/uniaxial/'
+CHARACTER(*), PARAMETER :: bi_a_path = './stress_curves/amp_sweep/equibiaxial/'
+CHARACTER(*), PARAMETER :: sh_a_path = './stress_curves/amp_sweep/shear/'
+CHARACTER(*), PARAMETER :: ssh_a_path = './stress_curves/amp_sweep/sshear/'
+!
 integer un
-
+!
 real*8,ALLOCATABLE::curvepoints(:,:)
 real*8::maxstresstime,maxstress,maxgammatime,maxgamma,minstresstime,minstress
 real*8:: maxstretch, maxstretchtime
@@ -51,8 +56,8 @@ PROPS(1)=2.d0/1000.000d0
 ! ELASTIC PARAM
 PROPS(2)=1.00d0  ! C10
 PROPS(3)=0.00d0 ! C01
-PROPS(4)=0.00d0 !K1
-PROPS(5)=0.1d0 !K2
+PROPS(4)=1.00d0 !K1
+PROPS(5)=1.d0 !K2
 PROPS(6)=0.1d0 !kdisp
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !viscous parameters - maxwell
@@ -81,15 +86,15 @@ RHO=ZERO
 PI=FOUR*ATAN(ONE)
 !
 !################################################################################################!
-NSTEPS=400 !NUMBER OF POINTS PER CYCLE
+NSTEPS=200 !NUMBER OF POINTS PER CYCLE
 !
-STRETCH_MAX = 2.D0
-STRETCH_INITIAL = 0.5d0
-DSTRETCH    = (STRETCH_MAX-STRETCH_INITIAL)/NSTEPS
-!
-GAMMA_MAX = 0.6D0
-GAMMA_INITIAL = -.6D0
-DGAMMA   = (GAMMA_MAX-GAMMA_INITIAL)/NSTEPS
+! STRETCH_MAX = 1.5D0
+! STRETCH_INITIAL = 1.0d0
+! DSTRETCH    = (STRETCH_MAX-STRETCH_INITIAL)/NSTEPS
+! !
+! GAMMA_MAX = 0.6D0
+! GAMMA_INITIAL = -.6D0
+! DGAMMA   = (GAMMA_MAX-GAMMA_INITIAL)/NSTEPS
 !################################################################################################!
 !CYLCIC RELATED VARIABLES
 NTESTS=61 !NUMBER OF TESTS
@@ -109,11 +114,25 @@ DO I1=1,NTESTS
 ENDDO
 !
 !AMPLITUDE SWEEP
+FREQ0 = 1.d0
 AMP_STRETCH=0.05D0
 PRE_STRETCH=1.1D0
 
+AMP_MIN = 0.01D0
+NTESTS = 10
+COUNTER=-0.05d0
+!UNIFORM DISTRIBUTITED LOG-SCALE POINTS
+DO I1=1,NTESTS
+  COUNTER=COUNTER+0.05d0
+  CURVEPOINTS(I1,2)=AMP_MIN*10.0d0**COUNTER 
+ENDDO
+
 AMP_GAMMA=0.3D0
-! 
+PRE_GAMMA=0.1D0
+!########################################################################################!
+!############################## |||   FREQUENCY SWEEP   ||| #############################!
+!########################################################################################!
+!
 !################################## |||   UNIAXIAL   ||| ################################!
  CALL RESETDFGRD(DFGRD1,NDI)
  OPEN (UNIT=150, FILE='./stress_curves/freq_sweep/uniaxial.out', STATUS='UNKNOWN')
@@ -128,7 +147,7 @@ DO I1=1,NTESTS   !TESTS LOOP
  F=FREQ*TWO*PI
  WRITE(filename,fmt='(i0,a)')I1,'.out'
  un=un+2;
- OPEN(unit=un,file=uni_path//filename,status='UNKNOWN')
+ OPEN(unit=un,file=uni_f_path//filename,status='UNKNOWN')
 !
  CYCLETIME=ONE/FREQ
  DTIME=CYCLETIME/NSTEPS
@@ -214,7 +233,7 @@ DO I1=1,NTESTS   !TESTS LOOP
  F=FREQ*TWO*PI
  WRITE(filename,fmt='(i0,a)')I1,'.out'
  un=un+2;
- OPEN(unit=un,file=bi_path//filename,status='UNKNOWN')
+ OPEN(unit=un,file=bi_f_path//filename,status='UNKNOWN')
 !
  CYCLETIME=ONE/FREQ
  DTIME=CYCLETIME/NSTEPS
@@ -294,7 +313,7 @@ DO I1=1,NTESTS   !TESTS LOOP
  F=FREQ*TWO*PI
  WRITE(filename,fmt='(i0,a)')I1,'.out'
  un=un+2;
- OPEN(unit=un,file=sh_path//filename,status='UNKNOWN')
+ OPEN(unit=un,file=sh_f_path//filename,status='UNKNOWN')
 !
  CYCLETIME=ONE/FREQ
  DTIME=CYCLETIME/NSTEPS
@@ -371,7 +390,7 @@ DO I1=1,NTESTS   !TESTS LOOP
  F=FREQ*TWO*PI
  WRITE(filename,fmt='(i0,a)')I1,'.out'
  un=un+2;
- OPEN(unit=un,file=ssh_path//filename,status='UNKNOWN')
+ OPEN(unit=un,file=ssh_f_path//filename,status='UNKNOWN')
 !
  CYCLETIME=ONE/FREQ
  DTIME=CYCLETIME/NSTEPS
@@ -388,7 +407,7 @@ MAXGAMMATIME=-1000.D0
 
    DO KSTEP=1,NSTEPS   !DEFORMATION LOOP
 !
-    GAMMA=AMP_GAMMA*DSIN(F*TIME(1))
+    GAMMA=AMP_GAMMA*DSIN(F*TIME(1))+PRE_GAMMA
     DFGRD1(1,2)=GAMMA
 !
 
@@ -433,9 +452,374 @@ MAXGAMMATIME=-1000.D0
   write(153,*) freq,storagemodulus,tandelta,lossmodulus
 ENDDO !
 close(153)
+
+
+!########################################################################################!
+!############################## |||   AMPLITUDE SWEEP   ||| #############################!
+!########################################################################################!
+
+!################################## |||   UNIAXIAL   ||| ################################!
+ CALL RESETDFGRD(DFGRD1,NDI)
+ OPEN (UNIT=150, FILE='./stress_curves/amp_sweep/uniaxial.out', STATUS='UNKNOWN')
+        rewind(150)
+!
+!
+DO I1=1,NTESTS   !TESTS LOOP
+!
+ AMP_STRETCH=CURVEPOINTS(I1,2)
+ TIME(1)=ZERO
+ F=FREQ0*TWO*PI
+ WRITE(filename,fmt='(i0,a)')I1,'.out'
+ un=un+2;
+ OPEN(unit=un,file=uni_a_path//filename,status='UNKNOWN')
+!
+ CYCLETIME=ONE/FREQ0
+ DTIME=CYCLETIME/NSTEPS
+ maxstress=0.0d0
+ maxstresstime=0.0d0
+ minstress=0.0d0
+ minstresstime=0.0d0
+!
+!
+MAXSTRETCH = 0.D0
+MAXSTRETCHTIME= 0.D0
+!
+ DO KK=1,NCYCLES    !CYCLES LOOP
+
+   DO KSTEP=1,NSTEPS   !DEFORMATION LOOP
+!
+    STRETCH=AMP_STRETCH*DSIN(F*TIME(1)) + PRE_STRETCH
+    DFGRD1(1,1)=STRETCH
+    DFGRD1(2,2)=ONE/SQRT(STRETCH)
+    DFGRD1(3,3)=ONE/SQRT(STRETCH)
+
+
+    CALL UMAT(STRESS,STATEV,DDSDDE,SSE,SPD,SCD,RPL,DDSDDT, DRPLDE,DRPLDT,STRAN,     &
+    DSTRAN,TIME,DTIME,TEMP,DTEMP,PREDEF,DPRED,CMNAME,NDI,NSHR,NTENS,NSTATEV,PROPS,  &
+    NPROPS,COORDS,DROT,PNEWDT,CELENT,DFGRD0,DFGRD1,NOEL,NPT,LAYER,KSPT,KSTEP,KINC)
+!    
+ 
+    if(kk.eq.ncycles)THEN  !LAST CYCLE VERIFICATIONS 
+     
+      if(stress(1).gt.maxstress) THEN
+      maxstress=stress(1)
+      maxstresstime=time(1)
+      endif
+      
+      if(stress(1).lt.minstress) THEN
+      minstress=stress(1)
+      minstresstime=time(1)
+      endif
+      
+      if(STRETCH.gt.MAXSTRETCH) THEN
+      MAXSTRETCH=STRETCH
+      MAXSTRETCHTIME=time(1)
+      endif
+      
+    endif
+    
+    TIME(1)   = TIME(1)+DTIME
+    write(un,*) TIME(1),STRETCH,STRESS(1)
+      !
+   ENDDO !nsteps
+ ENDDO !ncycles
+
+ stressamp=maxstress-minstress
+ delta=MAXSTRETCHTIME-maxstresstime !input - output shift
+
+ delta=delta*two*PI/cycletime
+        
+!   storagemodulus=(-maxstress+minstress)*0.5d0/AMP*dcos(delta)
+ storagemodulus=(maxstress/amp_stretch)*dcos(delta)!-pi/two)
+!  lossmodulus=(-maxstress+minstress)*0.5d0/AMP*dsin(delta)
+ lossmodulus=(maxstress/amp_stretch)*dsin(delta)!-pi/two)
+ tandelta=lossmodulus/storagemodulus
+  ! write(*,*) props
+  ! write(*,*)
+  ! write(*,*) freq,storagemodulus,lossmodulus,tandelta
+  ! write(*,*)
+  write(150,*) stretch,storagemodulus,lossmodulus,tandelta
+
+ENDDO !
+close(150)
+
+!################################## |||   BIAXIAL   ||| ################################!
+ CALL RESETDFGRD(DFGRD1,NDI)
+ OPEN (UNIT=150, FILE='./stress_curves/amp_sweep/biaxial.out', STATUS='UNKNOWN')
+        rewind(150)
+!
+!
+DO I1=1,NTESTS   !TESTS LOOP
+!
+ AMP_STRETCH=CURVEPOINTS(I1,2)
+ TIME(1)=ZERO
+ F=FREQ0*TWO*PI
+ WRITE(filename,fmt='(i0,a)')I1,'.out'
+ un=un+2;
+ OPEN(unit=un,file=bi_a_path//filename,status='UNKNOWN')
+!
+ CYCLETIME=ONE/FREQ0
+ DTIME=CYCLETIME/NSTEPS
+ maxstress=0.0d0
+ maxstresstime=0.0d0
+ minstress=0.0d0
+ minstresstime=0.0d0
+!
+!
+MAXSTRETCH = 0.D0
+MAXSTRETCHTIME= 0.D0
+!
+ DO KK=1,NCYCLES    !CYCLES LOOP
+
+   DO KSTEP=1,NSTEPS   !DEFORMATION LOOP
+!
+    STRETCH=AMP_STRETCH*DSIN(F*TIME(1)) + PRE_STRETCH
+    DFGRD1(1,1)=STRETCH
+    DFGRD1(2,2)=STRETCH
+    DFGRD1(3,3)=ONE/(STRETCH*STRETCH)
+
+
+    CALL UMAT(STRESS,STATEV,DDSDDE,SSE,SPD,SCD,RPL,DDSDDT, DRPLDE,DRPLDT,STRAN,     &
+    DSTRAN,TIME,DTIME,TEMP,DTEMP,PREDEF,DPRED,CMNAME,NDI,NSHR,NTENS,NSTATEV,PROPS,  &
+    NPROPS,COORDS,DROT,PNEWDT,CELENT,DFGRD0,DFGRD1,NOEL,NPT,LAYER,KSPT,KSTEP,KINC)
+!    
+ 
+    if(kk.eq.ncycles)THEN  !LAST CYCLE VERIFICATIONS 
+     
+      if(stress(1).gt.maxstress) THEN
+      maxstress=stress(1)
+      maxstresstime=time(1)
+      endif
+      
+      if(stress(1).lt.minstress) THEN
+      minstress=stress(1)
+      minstresstime=time(1)
+      endif
+      
+      if(STRETCH.gt.MAXSTRETCH) THEN
+      MAXSTRETCH=STRETCH
+      MAXSTRETCHTIME=time(1)
+      endif
+      
+    endif
+    
+    TIME(1)   = TIME(1)+DTIME
+    write(un,*) TIME(1),STRETCH,STRESS(1)
+      !
+   ENDDO !nsteps
+ ENDDO !ncycles
+
+ stressamp=maxstress-minstress
+ delta=MAXSTRETCHTIME-maxstresstime !input - output shift
+
+ delta=delta*two*PI/cycletime
+        
+!   storagemodulus=(-maxstress+minstress)*0.5d0/AMP*dcos(delta)
+ storagemodulus=(maxstress/amp_stretch)*dcos(delta)!-pi/two)
+!  lossmodulus=(-maxstress+minstress)*0.5d0/AMP*dsin(delta)
+ lossmodulus=(maxstress/amp_stretch)*dsin(delta)!-pi/two)
+ tandelta=lossmodulus/storagemodulus
+  ! write(*,*) props
+  ! write(*,*)
+  ! write(*,*) freq,storagemodulus,lossmodulus,tandelta
+  ! write(*,*)
+  write(150,*) stretch,storagemodulus,lossmodulus,tandelta
+
+ENDDO !
+close(150)
+
+! 
+!################################## |||   SHEAR   ||| ################################!
+CALL RESETDFGRD(DFGRD1,NDI)
+ OPEN (UNIT=152, FILE='stress_curves/amp_sweep/shear.out', STATUS='UNKNOWN')
+        rewind(152)
+TIME(1)     = 0.d0
+!
+!
+DO I1=1,NTESTS   !TESTS LOOP
+!
+ AMP_GAMMA=CURVEPOINTS(I1,2)
+ TIME(1)=ZERO
+ F=FREQ0*TWO*PI
+ WRITE(filename,fmt='(i0,a)')I1,'.out'
+ un=un+2;
+ OPEN(unit=un,file=sh_a_path//filename,status='UNKNOWN')
+!
+ CYCLETIME=ONE/FREQ0
+ DTIME=CYCLETIME/NSTEPS
+ maxstress=-1000.0d0
+ maxstresstime=-10000.0d0
+ minstress=1000.0d0
+ minstresstime=10000.0d0
+!
+!
+MAXGAMMA = -1000.D0
+MAXGAMMATIME=-1000.D0
+!
+ DO KK=1,NCYCLES    !CYCLES LOOP
+
+   DO KSTEP=1,NSTEPS   !DEFORMATION LOOP
+!
+    GAMMA=AMP_GAMMA*DSIN(F*TIME(1))
+    DFGRD1(1,2)=GAMMA
+    DFGRD1(2,1)=GAMMA
+!
+
+    CALL UMAT(STRESS,STATEV,DDSDDE,SSE,SPD,SCD,RPL,DDSDDT, DRPLDE,DRPLDT,STRAN,     &
+    DSTRAN,TIME,DTIME,TEMP,DTEMP,PREDEF,DPRED,CMNAME,NDI,NSHR,NTENS,NSTATEV,PROPS,  &
+    NPROPS,COORDS,DROT,PNEWDT,CELENT,DFGRD0,DFGRD1,NOEL,NPT,LAYER,KSPT,KSTEP,KINC)
+!    
+
+    if(kk.eq.ncycles)THEN  !LAST CYCLE VERIFICATIONS 
+      if(stress(4).gt.maxstress) THEN
+      maxstress=stress(4)
+      maxstresstime=time(1)
+      endif
+      
+      if(stress(4).lt.minstress) THEN
+      minstress=stress(4)
+      minstresstime=time(1)
+      endif
+      
+      if(GAMMA.gt.MAXGAMMA) THEN
+      MAXGAMMA=GAMMA
+      MAXGAMMATIME=time(1)
+      endif
+    endif
+
+    TIME(1)   = TIME(1)+DTIME
+    write(un,*) TIME(1),GAMMA,STRESS(4)
+      !
+   ENDDO !nsteps
+ ENDDO !ncycles
+
+ stressamp=maxstress-minstress
+ delta=-maxstresstime+maxgammatime
+        
+ delta=delta*two*PI/cycletime
+        
+!   storagemodulus=(-maxstress+minstress)*0.5d0/AMP*dcos(delta)
+ storagemodulus=(maxstress/amp_gamma)*dcos(delta)!-pi/two)
+!  lossmodulus=(-maxstress+minstress)*0.5d0/AMP*dsin(delta)
+ lossmodulus=(maxstress/amp_gamma)*dsin(delta)!-pi/two)
+ tandelta=lossmodulus/storagemodulus
+  write(152,*) freq,storagemodulus,tandelta,lossmodulus
+ENDDO !
+close(152)
+!################################## |||   SIMPLE SHEAR   ||| ################################!
+CALL RESETDFGRD(DFGRD1,NDI)
+ OPEN (UNIT=153, FILE='stress_curves/amp_sweep/sshear.out', STATUS='UNKNOWN')
+        rewind(153)
+TIME(1)     = 0.d0
+!
+!
+DO I1=1,NTESTS   !TESTS LOOP
+!
+ AMP_GAMMA=CURVEPOINTS(I1,2)
+ TIME(1)=ZERO
+ F=FREQ0*TWO*PI
+ WRITE(filename,fmt='(i0,a)')I1,'.out'
+ un=un+2;
+ OPEN(unit=un,file=ssh_a_path//filename,status='UNKNOWN')
+!
+ CYCLETIME=ONE/FREQ0
+ DTIME=CYCLETIME/NSTEPS
+ maxstress=-1000.0d0
+ maxstresstime=-10000.0d0
+ minstress=1000.0d0
+ minstresstime=10000.0d0
+!
+!
+MAXGAMMA = -1000.D0
+MAXGAMMATIME=-1000.D0
+!
+ DO KK=1,NCYCLES    !CYCLES LOOP
+
+   DO KSTEP=1,NSTEPS   !DEFORMATION LOOP
+!
+    GAMMA=AMP_GAMMA*DSIN(F*TIME(1))+PRE_GAMMA
+    DFGRD1(1,2)=GAMMA
+!
+
+    CALL UMAT(STRESS,STATEV,DDSDDE,SSE,SPD,SCD,RPL,DDSDDT, DRPLDE,DRPLDT,STRAN,     &
+    DSTRAN,TIME,DTIME,TEMP,DTEMP,PREDEF,DPRED,CMNAME,NDI,NSHR,NTENS,NSTATEV,PROPS,  &
+    NPROPS,COORDS,DROT,PNEWDT,CELENT,DFGRD0,DFGRD1,NOEL,NPT,LAYER,KSPT,KSTEP,KINC)
+!    
+
+    if(kk.eq.ncycles)THEN  !LAST CYCLE VERIFICATIONS 
+      if(stress(4).gt.maxstress) THEN
+      maxstress=stress(4)
+      maxstresstime=time(1)
+      endif
+      
+      if(stress(4).lt.minstress) THEN
+      minstress=stress(4)
+      minstresstime=time(1)
+      endif
+      
+      if(GAMMA.gt.MAXGAMMA) THEN
+      MAXGAMMA=GAMMA
+      MAXGAMMATIME=time(1)
+      endif
+    endif
+
+    TIME(1)   = TIME(1)+DTIME
+    write(un,*) TIME(1),GAMMA,STRESS(4)
+      !
+   ENDDO !nsteps
+ ENDDO !ncycles
+
+ stressamp=maxstress-minstress
+ delta=-maxstresstime+maxgammatime
+        
+ delta=delta*two*PI/cycletime
+        
+!   storagemodulus=(-maxstress+minstress)*0.5d0/AMP*dcos(delta)
+ storagemodulus=(maxstress/amp_gamma)*dcos(delta)!-pi/two)
+!  lossmodulus=(-maxstress+minstress)*0.5d0/AMP*dsin(delta)
+ lossmodulus=(maxstress/amp_gamma)*dsin(delta)!-pi/two)
+ tandelta=lossmodulus/storagemodulus
+  write(153,*) freq,storagemodulus,tandelta,lossmodulus
+ENDDO !
+close(153)
+
 ! !################################################################################################!
-CALL SYSTEM('gnuplot -p data_cyclic.plt')
+CALL SYSTEM('gnuplot -p data_cyclicfreq.plt')
 ! !################################################################################################!
+
+! !################################################################################################!
+CALL SYSTEM('gnuplot -p data_cyclicamp.plt')
+! !################################################################################################!
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ! AMPLITUDE SWWEEP
   AMPMIN=0.00d0
   DAMP=0.01d0

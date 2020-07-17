@@ -3,7 +3,7 @@
 #set autoscale xfix
 #set autoscale x2fix
 set terminal postscript eps enhanced color font 'Helvetica,12'
-set output 'cyclic.eps'
+set output 'cyclic_freq.eps'
 set key bottom right
 set grid
 #

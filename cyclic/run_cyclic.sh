@@ -1,2 +1,3 @@
 ./cyclic &&
-open cyclic.eps
+open cyclic_freq.eps
+open cyclic_amp.eps
