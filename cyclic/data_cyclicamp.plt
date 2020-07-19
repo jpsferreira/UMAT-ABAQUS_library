@@ -13,7 +13,6 @@ m="./stress_curves/amp_sweep/uniaxial.out"
 p="./stress_curves/amp_sweep/biaxial.out"
 s="./stress_curves/amp_sweep/shear.out"
 ss="./stress_curves/amp_sweep/sshear.out"
-
 set origin 0.0,0.5
 set xlabel "Amplitude"
 set ylabel "Storage Modulus"
