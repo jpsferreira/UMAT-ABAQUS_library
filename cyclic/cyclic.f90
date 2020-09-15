@@ -62,7 +62,7 @@ PROPS(6)=0.1d0 !kdisp
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !viscous parameters - maxwell
 ! v - number of dashpots
-PROPS(7)=3
+PROPS(7)=1
 !tau1 %
 PROPS(8)=2.0d0
 !teta1
@@ -86,7 +86,7 @@ RHO=ZERO
 PI=FOUR*ATAN(ONE)
 !
 !################################################################################################!
-NSTEPS=300 !NUMBER OF POINTS PER CYCLE
+NSTEPS=100 !NUMBER OF POINTS PER CYCLE
 !
 !################################################################################################!
 !CYLCIC RELATED VARIABLES
@@ -139,8 +139,6 @@ PRE_GAMMA=0.1D0
  OPEN (UNIT=150, FILE='./stress_curves/freq_sweep/uniaxial.out', STATUS='UNKNOWN')
         rewind(150)
 !
-
-!
 DO I1=1,NTESTSF   !TESTS LOOP
 !
  FREQ=CURVEPOINTS(I1,1)
@@ -170,12 +168,10 @@ MAXSTRETCHTIME= 0.D0
     DFGRD1(2,2)=ONE/SQRT(STRETCH)
     DFGRD1(3,3)=ONE/SQRT(STRETCH)
 
-
     CALL UMAT(STRESS,STATEV,DDSDDE,SSE,SPD,SCD,RPL,DDSDDT, DRPLDE,DRPLDT,STRAN,     &
     DSTRAN,TIME,DTIME,TEMP,DTEMP,PREDEF,DPRED,CMNAME,NDI,NSHR,NTENS,NSTATEV,PROPS,  &
     NPROPS,COORDS,DROT,PNEWDT,CELENT,DFGRD0,DFGRD1,NOEL,NPT,LAYER,KSPT,KSTEP,KINC)
 !    
- 
     if(kk.eq.ncycles)THEN  !LAST CYCLE VERIFICATIONS 
      
       if(stress(1).gt.maxstress) THEN
@@ -226,7 +222,6 @@ CALL RESETDFGRD(DFGRD1,NDI)
  OPEN (UNIT=151, FILE='stress_curves/freq_sweep/biaxial.out', STATUS='UNKNOWN')
         rewind(151)
 TIME(1)     = 0.d0
-!
 !
 DO I1=1,NTESTSF   !TESTS LOOP
 !
@@ -279,7 +274,6 @@ MAXSTRETCHTIME=-1000.D0
       MAXSTRETCHTIME=time(1)
       endif
     endif
-    
 
     TIME(1)   = TIME(1)+DTIME
     write(un,*) TIME(1),STRETCH,STRESS(1)

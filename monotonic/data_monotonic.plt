@@ -13,7 +13,7 @@ m="./stress_curves/uniaxial.out"
 p="./stress_curves/biaxial.out"
 s="./stress_curves/shear.out"
 ss="./stress_curves/s_shear.out"
-
+#
 set origin 0.0,0.5
 set xlabel "Stretch"
 set ylabel "Normal Cauchy Stress"

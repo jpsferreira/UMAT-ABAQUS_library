@@ -16,7 +16,8 @@ test_material |
 
 Simple bash scripts are provided for building with gfortran. The code can also be compiled with the Intel Fortran Compiler (and presumably any other Fortran compiler that supports modern standards).
 
-- ```build.sh``` - compiles the program
+- ```compile_monotonic.sh``` - compiles the program
+- ```run_monotonic.sh``` - compiles the program
 - ```run_code.sh``` simple input-output test for an arbitrary deformation gradient
 - ```cat_umat_files.sh``` since you can interact with abaqus using only one fortran file, this script concatenates fortran files into one umat file.
 
