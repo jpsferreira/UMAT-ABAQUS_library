@@ -1,0 +1,7 @@
+*Solid Section, elset=main_element, material=UD
+*Material, name=UD
+*User Material, constants=7
+<MU1>,<ALPHA1>,<MU2>,<ALPHA2>,<MU3>,<ALPHA3>,<KBULK>
+*DEPVAR
+1,
+1, DET, "DET"

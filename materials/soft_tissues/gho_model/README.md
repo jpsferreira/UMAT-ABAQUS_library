@@ -1,2 +1,0 @@
-# gho_model
-
