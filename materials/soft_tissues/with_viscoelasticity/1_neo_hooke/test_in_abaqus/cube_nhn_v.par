@@ -1,0 +1,19 @@
+*parameter
+density=1.0e-4 <= 0.0001>
+**ISOTROPIC - NEO HOOKE AND MOONEY RIVLIN <ABAQUS comment>
+C10=1.0 <= 1.0>
+KBULK=1000.0 <= 1000.0>
+**MAXWELL DASHPOTS (MAX=3) <ABAQUS comment>
+V=1 <= 1>
+TAU1=2.0 <= 2.0>
+TETA1=0.835 <= 0.835>
+TAU2=0.014 <= 0.014>
+TETA2=1.6 <= 1.6>
+TAU3=30.0 <= 30.0>
+TETA3=1.4 <= 1.4>
+** ---------------------------------------------------------------- <ABAQUS comment>
+**                         SECTIONS <ABAQUS comment>
+** ---------------------------------------------------------------- <ABAQUS comment>
+** ---------------------------------------------------------------- <ABAQUS comment>
+**     UD - user defined <ABAQUS comment>
+** ---------------------------------------------------------------- <ABAQUS comment>
