@@ -4,6 +4,6 @@
 <KBULK>,<C10>,<C01>,<K1>,<K2>,<KDISP>,<V>,<TAU1>
 <TETA1>,<TAU2>,<TETA2>,<TAU3>,<TETA3>
 *DEPVAR
-11,
-10, DET, "DET"
-11, L1, "fiber stretch"
+29,
+28, DET, "DET"
+29, L1, "fiber stretch"

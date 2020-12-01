@@ -4,5 +4,5 @@
 <KBULK>,<C10>,<C01>,<V>,<TAU1>,<TETA1>,<TAU2>,<TETA2>
 <TAU3>,<TETA3>
 *DEPVAR
-10,
-10, DET, "DET"
+28,
+28, DET, "DET"
