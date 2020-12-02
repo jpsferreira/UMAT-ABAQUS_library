@@ -20,7 +20,7 @@ from viewerModules import *
 from driverUtils import executeOnCaeStartup
 executeOnCaeStartup()
 
-odb_file = os.path.join(os.getcwd(), 'cube_hm_d.odb')
+odb_file = os.path.join(os.getcwd(), 'cube_gho.odb')
 
 o1 = session.openOdb(name=odb_file)
 session.viewports['Viewport: 1'].setValues(displayedObject=o1)
