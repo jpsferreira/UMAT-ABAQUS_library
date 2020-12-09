@@ -1,5 +1,5 @@
 
-UMAT-ABAQUS_library | A library with user-defined material models for soft biological tissues and filamentous networks. 
+UMAT-ABAQUS_library | A library with user-defined material models for soft biological tissues and filamentous networks. | A framework to test material response under multiple loading conditions.
 
 # Description
 
