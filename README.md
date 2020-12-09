@@ -1,28 +1,21 @@
-test_material | 
 
-# Brief description
+UMAT-ABAQUS_library | A library with user-defined material models for soft biological tissues and filamentous networks. 
 
+# Description
 
+This library provides subroutines for 3D implementation of large deformation constitutive behavior using continuum mechanics. The code is written in either fixed-form or modern Fortran. You can use it as a primary subroutine interface for ABAQUS (Dassault Systèmes) as a UMAT or an interface for your own finite element code. 
 
-## Subroutine interface
+Each material model comprises: source code and a one-element ABAQUS example. 
 
+This repository also has a framework to test the material response under multiple loading conditions, in particular:
+* Load type: Monotonic and cyclic loading 
+* Homogeneous deformation mode: Uniaxial, biaxial, simple shear and pure shear
 
-
-# Examples
-
-
+This repository is oriented for experienced researchers in biomechanics and continuum mechanics. You are highly welcome to use these open-resource codes for your non-commercial usage; please cite the below papers. Pull requests are welcome. 
 
 # Compiling
 
-Simple bash scripts are provided for building with gfortran. The code can also be compiled with the Intel Fortran Compiler (and presumably any other Fortran compiler that supports modern standards).
-
-- ```compile_monotonic.sh``` - compiles the program
-- ```run_monotonic.sh``` - compiles the program
-- ```run_code.sh``` simple input-output test for an arbitrary deformation gradient
-- ```cat_umat_files.sh``` since you can interact with abaqus using only one fortran file, this script concatenates fortran files into one umat file.
-
-# Documentation
-
+Simple bash scripts at each directory are provided for building with gfortran. The code can also be compiled with the Intel Fortran Compiler (and presumably any other Fortran compiler that supports modern standards). 
 
 
 ### License:
