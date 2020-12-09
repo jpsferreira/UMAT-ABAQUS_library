@@ -1,5 +1,15 @@
 *.out
 *.nb
+*.com
+*.par
+*.pes
+*.odb
+*.sta
+*.sim
+*.msg
+*.dat
+*.rpy
+*.rpy.*
 materials/filamentous_network/biofilament_affine_model/factin_affine_network.nb
 materials/filamentous_network/biofilament_affine_model/network_test.nb
 materials/filamentous_network/biofilament_affine_model/vonmises_distribution_simple.nb

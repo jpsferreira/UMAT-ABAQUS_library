@@ -1,0 +1,13 @@
+*Solid Section, elset=main_element, material=UD
+*Initial Conditions, type=field
+*Material, name=UD
+*user defined field
+*User Material, constants=8
+<KBULK>,<C10>,<C01>,<K1>,<K2>,<KDISP>,<BETA>,<PSIHALF>
+*DEPVAR
+5,
+1, DET, "DET"
+2, L1, "fiber stretch"
+3, SEFMAX, "accumulated strain energy"
+4, DMG, "damage"
+5, DMG_NLD, "nonlocal damage"

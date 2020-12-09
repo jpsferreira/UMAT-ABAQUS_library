@@ -1,1 +1,0 @@
-gfortran -Wextra -Wall -O3 -pedantic -o main *.for *.f90

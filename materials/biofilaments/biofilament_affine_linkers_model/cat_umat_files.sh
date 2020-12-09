@@ -1,1 +1,0 @@
-cat *.for > umat_affine_linkers.for
