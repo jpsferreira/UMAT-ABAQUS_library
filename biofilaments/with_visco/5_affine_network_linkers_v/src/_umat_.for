@@ -82,6 +82,9 @@ C     FILAMENTS NETWORK CONTRIBUTION
       DOUBLE PRECISION EFI
       INTEGER NTERM
 C
+C     VISCOUS PROPERTIES (GENERALIZED MAXWEL DASHPOTS)
+      DOUBLE PRECISION VSCPROPS(6)
+      INTEGER VV   
 C     JAUMMAN RATE CONTRIBUTION (REQUIRED FOR ABAQUS UMAT)
       DOUBLE PRECISION CJR(NDI,NDI,NDI,NDI)
 C     CAUCHY STRESS AND ELASTICITY TENSOR
@@ -181,16 +184,19 @@ C     NETWORK
       BB        = PROPS(14)   
       AFFPROPS = PROPS(13:14)    
 C
+C     VISCOUS EFFECTS
+      VV       = INT(PROPS(15))
+      VSCPROPS = PROPS(16:21)
 C     NUMERICAL COMPUTATIONS
       NTERM    = 60      
 C 
 C        STATE VARIABLES AND CHEMICAL PARAMETERS
 C
       IF ((TIME(1).EQ.ZERO).AND.(KSTEP.EQ.1)) THEN
-      CALL INITIALIZE(STATEV)   
+      CALL INITIALIZE(STATEV,VV)   
       ENDIF
 C        READ STATEV
-      CALL SDVREAD(STATEV)       
+      CALL SDVREAD(STATEV,VV)       
 C----------------------------------------------------------------------
 C---------------------------- KINEMATICS ------------------------------
 C----------------------------------------------------------------------
@@ -324,7 +330,21 @@ C
 C     ELASTICITY TENSOR
       DDSIGDDE=CVOL+CISO+CJR
 C
+C----------------------------------------------------------------------
+C-------------------------- VISCOUS PART ------------------------------
+C----------------------------------------------------------------------
+C      PULLBACK OF STRESS AND ELASTICITY TENSORS
+      CALL PULL2(PKVOL,SVOL,DFGRD1INV,DET,NDI)
+      CALL PULL2(PKISO,SISO,DFGRD1INV,DET,NDI)
+      CALL PULL4(CMVOL,CVOL,DFGRD1INV,DET,NDI)
+      CALL PULL4(CMISO,CISO,DFGRD1INV,DET,NDI)
+C      VISCOUS DAMPING 
+      CALL VISCO(PK2,DDPKDDE,VV,PKVOL,PKISO,CMVOL,CMISO,DTIME,
+     1            VSCPROPS,STATEV,NDI) 
+C      PUSH FORWARD OF STRESS AND ELASTICITY TENSOR
+      CALL PUSH2(SIGMA,PK2,DFGRD1,DET,NDI)
 C
+      CALL PUSH4(DDSIGDDE,DDPKDDE,DFGRD1,DET,NDI)
 C----------------------------------------------------------------------
 C------------------------- INDEX ALLOCATION ---------------------------
 C----------------------------------------------------------------------
@@ -336,7 +356,7 @@ C--------------------------- STATE VARIABLES --------------------------
 C----------------------------------------------------------------------
 C     DO K1 = 1, NTENS
 C      STATEV(1:27) = VISCOUS TENSORS
-       CALL SDVWRITE(DET,STATEV)
+       CALL SDVWRITE(STATEV,DET,VV)
 C     END DO
 C----------------------------------------------------------------------
       RETURN

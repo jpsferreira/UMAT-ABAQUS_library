@@ -183,15 +183,20 @@ C
 C
       RETURN
       END SUBROUTINE ISOMAT
-      SUBROUTINE SDVREAD(STATEV)
+      SUBROUTINE SDVREAD(STATEV,VV)
 C>    VISCOUS DISSIPATION: READ STATE VARS
       IMPLICIT NONE
       INCLUDE 'PARAM_UMAT.INC'
 C
-      INTEGER VV,POS1,POS2,POS3,I1
+      INTEGER VV
       DOUBLE PRECISION STATEV(NSDV)
-C
-
+C        read your sdvs here. they should be allocated. 
+C          after the viscous terms (only if you use viscosity check hvread)
+!        POS1=9*VV
+!        DO I1=1,NCH
+!         POS2=POS1+I1
+!         FRAC(I1)=STATEV(POS2)
+!        ENDDO
 C
       RETURN
 C
@@ -380,6 +385,9 @@ C     FILAMENTS NETWORK CONTRIBUTION
       DOUBLE PRECISION EFI
       INTEGER NTERM
 C
+C     VISCOUS PROPERTIES (GENERALIZED MAXWEL DASHPOTS)
+      DOUBLE PRECISION VSCPROPS(6)
+      INTEGER VV   
 C     JAUMMAN RATE CONTRIBUTION (REQUIRED FOR ABAQUS UMAT)
       DOUBLE PRECISION CJR(NDI,NDI,NDI,NDI)
 C     CAUCHY STRESS AND ELASTICITY TENSOR
@@ -479,16 +487,19 @@ C     NETWORK
       BB        = PROPS(14)   
       AFFPROPS = PROPS(13:14)    
 C
+C     VISCOUS EFFECTS
+      VV       = INT(PROPS(15))
+      VSCPROPS = PROPS(16:21)
 C     NUMERICAL COMPUTATIONS
       NTERM    = 60      
 C 
 C        STATE VARIABLES AND CHEMICAL PARAMETERS
 C
       IF ((TIME(1).EQ.ZERO).AND.(KSTEP.EQ.1)) THEN
-      CALL INITIALIZE(STATEV)   
+      CALL INITIALIZE(STATEV,VV)   
       ENDIF
 C        READ STATEV
-      CALL SDVREAD(STATEV)       
+      CALL SDVREAD(STATEV,VV)       
 C----------------------------------------------------------------------
 C---------------------------- KINEMATICS ------------------------------
 C----------------------------------------------------------------------
@@ -622,7 +633,21 @@ C
 C     ELASTICITY TENSOR
       DDSIGDDE=CVOL+CISO+CJR
 C
+C----------------------------------------------------------------------
+C-------------------------- VISCOUS PART ------------------------------
+C----------------------------------------------------------------------
+C      PULLBACK OF STRESS AND ELASTICITY TENSORS
+      CALL PULL2(PKVOL,SVOL,DFGRD1INV,DET,NDI)
+      CALL PULL2(PKISO,SISO,DFGRD1INV,DET,NDI)
+      CALL PULL4(CMVOL,CVOL,DFGRD1INV,DET,NDI)
+      CALL PULL4(CMISO,CISO,DFGRD1INV,DET,NDI)
+C      VISCOUS DAMPING 
+      CALL VISCO(PK2,DDPKDDE,VV,PKVOL,PKISO,CMVOL,CMISO,DTIME,
+     1            VSCPROPS,STATEV,NDI) 
+C      PUSH FORWARD OF STRESS AND ELASTICITY TENSOR
+      CALL PUSH2(SIGMA,PK2,DFGRD1,DET,NDI)
 C
+      CALL PUSH4(DDSIGDDE,DDPKDDE,DFGRD1,DET,NDI)
 C----------------------------------------------------------------------
 C------------------------- INDEX ALLOCATION ---------------------------
 C----------------------------------------------------------------------
@@ -634,7 +659,7 @@ C--------------------------- STATE VARIABLES --------------------------
 C----------------------------------------------------------------------
 C     DO K1 = 1, NTENS
 C      STATEV(1:27) = VISCOUS TENSORS
-       CALL SDVWRITE(DET,STATEV)
+       CALL SDVWRITE(STATEV,DET,VV)
 C     END DO
 C----------------------------------------------------------------------
       RETURN
@@ -701,20 +726,32 @@ C
 C
        RETURN
       END SUBROUTINE CONTRACTION44
-       SUBROUTINE INITIALIZE(STATEV)
+       SUBROUTINE INITIALIZE(STATEV,VV)
 C
       IMPLICIT NONE
       INCLUDE 'PARAM_UMAT.INC'
+C      
+C      COMMON /KCOMMON/KBLOCK
 C
 C      DOUBLE PRECISION TIME(2),KSTEP
       INTEGER I1,POS,POS1,POS2,POS3,VV
       DOUBLE PRECISION STATEV(NSDV)
-C
-        POS1=0
-C       DETERMINANT        
-          STATEV(POS1+1)=ONE
-C        CONTRACTION VARIANCE
-          STATEV(POS1+2)=ZERO          
+C        VISCOUS TENSORS
+       DO I1=1,VV
+        POS=9*I1-9
+        STATEV(1+POS)=ZERO
+        STATEV(2+POS)=ZERO
+        STATEV(3+POS)=ZERO
+        STATEV(4+POS)=ZERO
+        STATEV(5+POS)=ZERO
+        STATEV(6+POS)=ZERO
+        STATEV(7+POS)=ZERO
+        STATEV(8+POS)=ZERO
+        STATEV(9+POS)=ZERO
+       ENDDO
+       POS1=9*VV
+C        DETERMINANT
+        STATEV(POS1+1)=ONE
 C     
       RETURN
 C
@@ -743,6 +780,28 @@ C
 C      
       RETURN
       END SUBROUTINE SETVOL
+      SUBROUTINE HVWRITE(STATEV,HV,V1,NDI)
+C>    VISCOUS DISSIPATION: WRITE STATE VARS
+      IMPLICIT NONE
+      INCLUDE 'PARAM_UMAT.INC'
+C
+      INTEGER NDI,V1,POS
+      DOUBLE PRECISION HV(NDI,NDI),STATEV(NSDV)
+C
+        POS=9*V1-9
+        STATEV(1+POS)=HV(1,1)
+        STATEV(2+POS)=HV(1,2)
+        STATEV(3+POS)=HV(1,3)
+        STATEV(4+POS)=HV(2,1)
+        STATEV(5+POS)=HV(2,2)
+        STATEV(6+POS)=HV(2,3)
+        STATEV(7+POS)=HV(3,1)
+        STATEV(8+POS)=HV(3,2)
+        STATEV(9+POS)=HV(3,3)
+C
+      RETURN
+C      
+      END SUBROUTINE HVWRITE
       SUBROUTINE PK2ISOMATFIC(FIC,DISO,CBAR,CBARI1,UNIT2,NDI)
 C>     ISOTROPIC MATRIX: 2PK 'FICTICIOUS' STRESS TENSOR
 C      INPUT:
@@ -825,19 +884,6 @@ C
       RETURN
 C
       END SUBROUTINE UEXTERNALDB
-      SUBROUTINE GETOUTDIR(OUTDIR, LENOUTDIR)
-C>     GET CURRENT WORKING DIRECTORY
-      INCLUDE 'aba_param.inc'
-C 
-      CHARACTER*256 OUTDIR
-      INTEGER LENOUTDIR
-C
-      CALL GETCWD(OUTDIR)
-c        OUTDIR=OUTDIR(1:SCAN(OUTDIR,'\',BACK=.TRUE.)-1)
-      LENOUTDIR=LEN_TRIM(OUTDIR)
-C
-      RETURN
-      END SUBROUTINE GETOUTDIR
       SUBROUTINE SIGISOMATFIC(SFIC,PKFIC,F,DET,NDI)
 C>    ISOTROPIC MATRIX:  ISOCHORIC CAUCHY STRESS 
       IMPLICIT NONE
@@ -1974,18 +2020,78 @@ C
 C
       RETURN      
       END SUBROUTINE FSLIP
-      SUBROUTINE SDVWRITE(DET,STATEV)
+      SUBROUTINE SDVWRITE(STATEV,DET,VV)
 C>    VISCOUS DISSIPATION: WRITE STATE VARS
       IMPLICIT NONE
       INCLUDE 'PARAM_UMAT.INC'
 C
-      INTEGER VV,POS1,POS2,POS3,I1
       DOUBLE PRECISION STATEV(NSDV),DET
-C
-        STATEV(1)=DET
+      INTEGER VV,POS1
+C        write your sdvs here. they should be allocated 
+C                after the viscous terms (check hvwrite)
+      POS1=9*VV 
+      STATEV(POS1+1)=DET
+
       RETURN
 C
       END SUBROUTINE SDVWRITE
+      SUBROUTINE VISCO(PK,CMAT,VV,PKVOL,PKISO,CMATVOL,CMATISO,DTIME,
+     1                                              VSCPROPS,STATEV,NDI)
+C>    VISCOUS DISSIPATION: MAXWELL SPRINGS AND DASHPOTS SCHEME
+      IMPLICIT NONE
+      INCLUDE 'PARAM_UMAT.INC'
+C
+      INTEGER I1,J1,K1,L1,NDI,VV,V1
+      DOUBLE PRECISION PK(NDI,NDI),PKVOL(NDI,NDI),PKISO(NDI,NDI),
+     1                  CMAT(NDI,NDI,NDI,NDI),CMATVOL(NDI,NDI,NDI,NDI),
+     2                  CMATISO(NDI,NDI,NDI,NDI),VSCPROPS(6)
+      DOUBLE PRECISION Q(NDI,NDI),QV(NDI,NDI),HV(NDI,NDI),
+     1                  HV0(NDI,NDI),STATEV(NSDV)
+      DOUBLE PRECISION DTIME,TETA,TAU,AUX,AUXC
+C      
+      Q=ZERO
+      QV=ZERO
+      HV=ZERO
+      AUXC=ZERO
+C      
+C     ( GENERAL MAXWELL DASHPOTS)
+      DO V1=1,VV 
+C      
+      TAU=VSCPROPS(2*V1-1)
+      TETA=VSCPROPS(2*V1)
+C
+C      READ STATE VARIABLES
+      CALL HVREAD(HV,STATEV,V1,NDI)
+      HV0=HV
+C        RALAXATION TENSORS      
+      CALL RELAX(QV,HV,AUX,HV0,PKISO,DTIME,TAU,TETA,NDI)
+      AUXC=AUXC+AUX     
+C        WRITE STATE VARIABLES      
+      CALL HVWRITE(STATEV,HV,V1,NDI)
+C
+      Q=Q+QV
+C
+      END DO
+C              
+      AUXC=ONE+AUXC
+      PK=PKVOL+PKISO
+C 
+      DO I1=1,NDI
+       DO J1=1,NDI
+        PK(I1,J1)=PK(I1,J1)+Q(I1,J1)
+        DO K1=1,NDI
+         DO L1=1,NDI
+          CMAT(I1,J1,K1,L1)= CMATVOL(I1,J1,K1,L1)+
+     1                        AUXC*CMATISO(I1,J1,K1,L1)
+         ENDDO
+        ENDDO
+       ENDDO
+      ENDDO
+      
+C
+C
+      RETURN
+      END SUBROUTINE VISCO
       SUBROUTINE BANGLE(ANG,F,MF,NOEL,NDI)
 C>    ANGLE BETWEEN FILAMENT AND PREFERED DIRECTION
       IMPLICIT NONE
@@ -2176,6 +2282,30 @@ C
 C
       RETURN
       END SUBROUTINE PROJLAG
+      SUBROUTINE RELAX(QV,HV,AUX1,HV0,PKISO,DTIME,TAU,TETA,NDI)
+C>    VISCOUS DISSIPATION: STRESS RELAXATION TENSORS
+      IMPLICIT NONE
+      INCLUDE 'PARAM_UMAT.INC'
+C
+      INTEGER I1,J1,NDI
+      DOUBLE PRECISION QV(NDI,NDI),HV(NDI,NDI),PKISO(NDI,NDI),
+     1                 HV0(NDI,NDI)
+      DOUBLE PRECISION DTIME,TETA,TAU,AUX1,AUX
+C
+      QV=ZERO
+      HV=ZERO
+
+       AUX=DEXP(-DTIME*((TWO*TAU)**(-ONE)))
+       AUX1=TETA*AUX
+       DO I1=1,NDI
+        DO J1=1,NDI
+         QV(I1,J1)=HV0(I1,J1)+AUX1*PKISO(I1,J1)
+         HV(I1,J1)=AUX*(AUX*QV(I1,J1)-TETA*PKISO(I1,J1))
+        END DO
+       END DO
+C      
+      RETURN
+      END SUBROUTINE RELAX
       SUBROUTINE DENSITY(RHO,ANG,BB,ERFI)
 C>    SINGLE FILAMENT: DENSITY FUNCTION VALUE
       IMPLICIT NONE
@@ -2207,3 +2337,25 @@ C
 C
       RETURN
       END SUBROUTINE CSISOMATFIC
+      SUBROUTINE HVREAD(HV,STATEV,V1,NDI)
+C>    VISCOUS DISSIPATION: READ STATE VARS
+      IMPLICIT NONE
+      INCLUDE 'PARAM_UMAT.INC'
+C
+      INTEGER NDI,V1,POS
+      DOUBLE PRECISION HV(NDI,NDI),STATEV(NSDV)
+C
+        POS=9*V1-9
+        HV(1,1)=STATEV(1+POS)
+        HV(1,2)=STATEV(2+POS)
+        HV(1,3)=STATEV(3+POS)
+        HV(2,1)=STATEV(4+POS)
+        HV(2,2)=STATEV(5+POS)
+        HV(2,3)=STATEV(6+POS)
+        HV(3,1)=STATEV(7+POS)
+        HV(3,2)=STATEV(8+POS)
+        HV(3,3)=STATEV(9+POS)       
+C
+      RETURN
+C     
+      END SUBROUTINE HVREAD

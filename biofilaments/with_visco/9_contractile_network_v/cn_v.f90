@@ -11,7 +11,7 @@ INCLUDE 'PARAM_UMAT.INC'
       COMMON /KFILC/CHEM
       DOUBLE PRECISION MF0(NWP,3),RW(NWP),PREFDIR(NELEM,4),CHEM(2,7)
 
-PARAMETER(NTENS = 6, NSTATEV = NSDV, NPROPS = 18, NDI=3, NSHR=3)
+PARAMETER(NTENS = 6, NSTATEV = NSDV, NPROPS = 25, NDI=3, NSHR=3)
 PARAMETER(NOEL = 1, NPT = 8)
 !
 CHARACTER*8 CMNAME
@@ -89,6 +89,22 @@ PROPS(17)=1.1e1
 !PROPS(15)=6.0e4
 !FFMAX - activation
 PROPS(18)=1.1e1
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! !viscous parameters - maxwell
+! v - number of dashpots
+PROPS(19)=1
+!tau1 %
+PROPS(20)=2.0d0
+!teta1
+PROPS(21)=0.835d0
+!tau2 %
+PROPS(22)=1.2d0
+!teta2
+PROPS(23)=7.0d0
+!tau3 %
+PROPS(24)=12.d0
+!teta3
+PROPS(25)=2.0d0
 ! !
 STATEV=0.D0
 !

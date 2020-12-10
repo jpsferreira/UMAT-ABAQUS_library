@@ -86,6 +86,9 @@ C     CONTRACTILE FILAMENT
       DOUBLE PRECISION FRIC,FFMAX,FRAC0(4),FRAC(4),KCH(7),RU0(NWP),
      1                  PREFDIR(NELEM,4),VARACT,DIRMAX(NDI)
 C
+C     VISCOUS PROPERTIES (GENERALIZED MAXWEL DASHPOTS)
+      DOUBLE PRECISION VSCPROPS(6)
+      INTEGER VV   
 C     JAUMMAN RATE CONTRIBUTION (REQUIRED FOR ABAQUS UMAT)
       DOUBLE PRECISION CJR(NDI,NDI,NDI,NDI)
 C     CAUCHY STRESS AND ELASTICITY TENSOR
@@ -193,16 +196,19 @@ C     AFFINE NETWORK
       FFMAX    = PROPS(18)   
       AFFPROPS = PROPS(15:18)    
 C
+C     VISCOUS EFFECTS
+      VV       = INT(PROPS(19))
+      VSCPROPS = PROPS(20:25)
 C     NUMERICAL COMPUTATIONS
       NTERM    = 60      
 C 
 C        STATE VARIABLES AND CHEMICAL PARAMETERS
 C
       IF ((TIME(1).EQ.ZERO).AND.(KSTEP.EQ.1)) THEN
-      CALL INITIALIZE(STATEV)   
+      CALL INITIALIZE(STATEV,VV)   
       ENDIF
 C        READ STATEV
-      CALL SDVREAD(FRAC0,RU0,STATEV)       
+      CALL SDVREAD(STATEV,FRAC0,RU0,VV)       
 C----------------------------------------------------------------------
 C---------------------------- KINEMATICS ------------------------------
 C----------------------------------------------------------------------
@@ -364,7 +370,7 @@ C--------------------------- STATE VARIABLES --------------------------
 C----------------------------------------------------------------------
 C     DO K1 = 1, NTENS
 C      STATEV(1:27) = VISCOUS TENSORS
-       CALL SDVWRITE(FRAC,RU0,DET,VARACT,DIRMAX,STATEV)
+       CALL SDVWRITE(STATEV,FRAC,RU0,DET,VARACT,DIRMAX,VV)
 C     END DO
 C----------------------------------------------------------------------
       RETURN

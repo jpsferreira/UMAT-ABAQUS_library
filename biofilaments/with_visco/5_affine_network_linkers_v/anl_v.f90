@@ -10,7 +10,7 @@ INCLUDE 'PARAM_UMAT.INC'
       COMMON /KFILP/PREFDIR
       DOUBLE PRECISION MF0(NWP,3),RW(NWP),PREFDIR(NELEM,4)
 
-PARAMETER(NTENS = 6, NSTATEV = NSDV, NPROPS = 14, NDI=3, NSHR=3)
+PARAMETER(NTENS = 6, NSTATEV = NSDV, NPROPS = 21, NDI=3, NSHR=3)
 PARAMETER(NOEL = 1, NPT = 8)
 !
 CHARACTER*8 CMNAME
@@ -78,6 +78,22 @@ PROPS(13)=7.66D0
 !B....
 PROPS(14)=0.001d0
 ! !
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! !viscous parameters - maxwell
+! v - number of dashpots
+PROPS(15)=1
+!tau1 %
+PROPS(16)=2.0d0
+!teta1
+PROPS(17)=0.835d0
+!tau2 %
+PROPS(18)=1.2d0
+!teta2
+PROPS(19)=7.0d0
+!tau3 %
+PROPS(20)=12.d0
+!teta3
+PROPS(21)=2.0d0
 STATEV=0.D0
 !
 erf=0.d0

@@ -73,7 +73,7 @@ C
        CALL CONTRACTILE(FI,FFI,DWI,DDWI,FFIC,RU,RU,LAMBDAIC,LAMBDAIF,
      1                LAMBDA0,L,R0,MU0,BETA,B0,FFMAX,FRIC,FRAC,DTIME)       
        RU0(I1)=RU
-       write(*,*) i1,     LAMBDAIF, ru
+C       write(*,*) i1,     LAMBDAIF, ru
 C        
        CALL BANGLE(ANG,F,MFI,NOEL,NDI)
 C      

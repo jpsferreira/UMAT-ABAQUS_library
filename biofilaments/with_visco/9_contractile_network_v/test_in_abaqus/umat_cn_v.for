@@ -183,15 +183,25 @@ C
 C
       RETURN
       END SUBROUTINE ISOMAT
-      SUBROUTINE SDVREAD(STATEV)
+      SUBROUTINE SDVREAD(STATEV,FRAC,RU0,VV)
 C>    VISCOUS DISSIPATION: READ STATE VARS
       IMPLICIT NONE
       INCLUDE 'PARAM_UMAT.INC'
 C
       INTEGER VV,POS1,POS2,POS3,I1
       DOUBLE PRECISION STATEV(NSDV)
+      DOUBLE PRECISION FRAC(4),RU0(NWP)
 C
-
+       POS1=9*VV
+       DO I1=1,4
+         POS2=POS1+I1
+         FRAC(I1)=STATEV(POS2)
+        ENDDO
+C
+        DO I1=1,NWP
+          POS3=POS2+I1
+          RU0(I1)=STATEV(POS3)
+        ENDDO
 C
       RETURN
 C
@@ -261,17 +271,19 @@ C
      2                 RW(NWP),
      3                 H(NDI,NDI),HH(NDI,NDI,NDI,NDI),
      4                 HI(NDI,NDI),HHI(NDI,NDI,NDI,NDI)
-      DOUBLE PRECISION FILPROPS(6),NAFFPROPS(2),MFI(NDI),MF0I(NDI)
+      DOUBLE PRECISION FILPROPS(8),NAFFPROPS(2),MFI(NDI),MF0I(NDI)
       DOUBLE PRECISION DET,AUX,LAMBDAI,DW,DDW,RWI,AUX1,AUX2,FI,FFI
-      DOUBLE PRECISION L,R0,MU0,B0,BETA,LAMBDA,LAMBDA0,N,PP
+      DOUBLE PRECISION L,R0,MU0,B0,BETA,LAMBDA,LAMBDA0,N,PP,ETAC,R0C,R0F
 C
 C     FILAMENT
-      L      = FILPROPS(1)
-      R0      = FILPROPS(2)
-      MU0     = FILPROPS(3)
-      BETA    = FILPROPS(4)
-      B0      = FILPROPS(5)
-      LAMBDA0 = FILPROPS(6)      
+      L       = FILPROPS(1)
+      R0F     = FILPROPS(2)
+      R0C     = FILPROPS(3)
+      ETAC    = FILPROPS(4)      
+      MU0     = FILPROPS(5)
+      BETA    = FILPROPS(6)
+      B0      = FILPROPS(7)
+      LAMBDA0 = FILPROPS(8)
 C     NETWORK
       N       = NAFFPROPS(1)
       PP      = NAFFPROPS(2)
@@ -282,6 +294,7 @@ C
       HI=ZERO
       HHI=ZERO
       AUX=N*(DET**(-ONE))
+      R0 = R0F+R0C
 C  
       DO I1=1,NWP
 C
@@ -387,7 +400,7 @@ C>     05/11/2016    Joao Ferreira      full network model           |
 C>--------------------------------------------------------------------
 C>     Description:
 C>     UMAT: USER MATERIAL FOR THE FULL NETWORK MODEL.
-C>                 NON-AFFINE DEFORMATIONS
+C>                AFFINE DEFORMATIONS
 C>     UEXTERNALDB: READ FILAMENTS ORIENTATION AND PREFERED DIRECTION
 C>--------------------------------------------------------------------
 C>---------------------------------------------------------------------
@@ -406,11 +419,14 @@ C     FILAMENTS DIRECTION
       COMMON /KFIL/MF0
 C     FILAMENTS WEIGHT      
       COMMON /KFILR/RW
-C
+C     PREFERED DIRETION
+      COMMON /KFILP/PREFDIR
+C     CHEMICAL DYNAMICS MATRIX   
+      COMMON /KFILF/FRAC0
+      COMMON /KFILK/KCH
       CHARACTER*8 CMNAME
       INTEGER NDI, NSHR, NTENS, NSTATEV, NPROPS, NOEL, NPT,
      1        LAYER, KSPT, KSTEP, KINC
-C     
       DOUBLE PRECISION STRESS(NTENS),STATEV(NSTATEV),
      1 DDSDDE(NTENS,NTENS),DDSDDT(NTENS),DRPLDE(NTENS),
      2 STRAN(NTENS),DSTRAN(NTENS),TIME(2),PREDEF(1),DPRED(1),
@@ -418,6 +434,7 @@ C
 C
       DOUBLE PRECISION SSE, SPD, SCD, RPL, DRPLDT, DTIME, TEMP,
      1                 DTEMP,PNEWDT,CELENT
+C
 C     FLAGS
 C      INTEGER FLAG1
 C     UTILITY TENSORS
@@ -445,9 +462,10 @@ C     ISOCHORIC ISOTROPIC CONTRIBUTION
      2                 CMISOMATFIC(NDI,NDI,NDI,NDI),
      3                 CISOMATFIC(NDI,NDI,NDI,NDI)
 C     FILAMENTS NETWORK CONTRIBUTION
-      DOUBLE PRECISION MF0(NWP,3),RW(NWP),FILPROPS(6),
+      DOUBLE PRECISION MF0(NWP,3),RW(NWP),FILPROPS(8),
      1                 NAFFPROPS(2),AFFPROPS(4)
-      DOUBLE PRECISION LL,R0,LAMBDA0,MU0,BETA,NN,MM,B0,BB,PHI,P
+      DOUBLE PRECISION LL,R0,LAMBDA0,MU0,BETA,NN,MM,B0,BB
+      DOUBLE PRECISION PHI,P,R0C,R0F,ETAC,NA
       DOUBLE PRECISION PKNETFIC(NDI,NDI),CMNETFIC(NDI,NDI,NDI,NDI)
       DOUBLE PRECISION SNETFIC(NDI,NDI),CNETFIC(NDI,NDI,NDI,NDI)
       DOUBLE PRECISION PKNETFICAF(NDI,NDI),PKNETFICNAF(NDI,NDI)
@@ -458,6 +476,13 @@ C     FILAMENTS NETWORK CONTRIBUTION
      1                 CNETFICNAF(NDI,NDI,NDI,NDI)
       DOUBLE PRECISION EFI
       INTEGER NTERM
+C     CONTRACTILE FILAMENT
+      DOUBLE PRECISION FRIC,FFMAX,FRAC0(4),FRAC(4),KCH(7),RU0(NWP),
+     1                  PREFDIR(NELEM,4),VARACT,DIRMAX(NDI)
+C
+C     VISCOUS PROPERTIES (GENERALIZED MAXWEL DASHPOTS)
+      DOUBLE PRECISION VSCPROPS(6)
+      INTEGER VV   
 C     JAUMMAN RATE CONTRIBUTION (REQUIRED FOR ABAQUS UMAT)
       DOUBLE PRECISION CJR(NDI,NDI,NDI,NDI)
 C     CAUCHY STRESS AND ELASTICITY TENSOR
@@ -524,12 +549,13 @@ C     FILAMENTS NETWORK
       CMNETFICNAF=ZERO
       CNETFICAF=ZERO
       CNETFICNAF=ZERO
+C
+      RU0=ZERO 
 C     JAUMANN RATE
       CJR=ZERO
 C     TOTAL CAUCHY STRESS AND ELASTICITY TENSORS
       SIGMA=ZERO
-      DDSIGDDE=ZERO
-C   
+      DDSIGDDE=ZERO   
 C----------------------------------------------------------------------
 C------------------------ IDENTITY TENSORS ----------------------------
 C----------------------------------------------------------------------
@@ -545,26 +571,38 @@ C     ISOCHORIC ISOTROPIC
       PHI      = PROPS(4)
 C     FILAMENT
       LL       = PROPS(5)
-      R0       = PROPS(6)
-      MU0      = PROPS(7)
-      BETA     = PROPS(8)
-      B0       = PROPS(9)
-      LAMBDA0  = PROPS(10)
-      FILPROPS = PROPS(5:10)
-C     NETWORK
-      NN       = PROPS(11)
-      P        = PROPS(12)   
-      NAFFPROPS= PROPS(11:12)     
+      R0F      = PROPS(6)
+      R0C      = PROPS(7)
+      ETAC     = PROPS(8)
+      MU0      = PROPS(9)
+      BETA     = PROPS(10)
+      B0       = PROPS(11)
+      LAMBDA0  = PROPS(12)
+      FILPROPS = PROPS(5:12)
+C     NONAFFINE NETWORK
+      NN       = PROPS(13)
+      P        = PROPS(14)
+      NAFFPROPS= PROPS(13:14)
+C     AFFINE NETWORK
+      MM       = PROPS(15)
+      BB        = PROPS(16)
+      FRIC     = PROPS(17)
+      FFMAX    = PROPS(18)   
+      AFFPROPS = PROPS(15:18)    
+C
+C     VISCOUS EFFECTS
+      VV       = INT(PROPS(19))
+      VSCPROPS = PROPS(20:25)
 C     NUMERICAL COMPUTATIONS
       NTERM    = 60      
 C 
 C        STATE VARIABLES AND CHEMICAL PARAMETERS
 C
       IF ((TIME(1).EQ.ZERO).AND.(KSTEP.EQ.1)) THEN
-      CALL INITIALIZE(STATEV)   
+      CALL INITIALIZE(STATEV,VV)   
       ENDIF
 C        READ STATEV
-      CALL SDVREAD(STATEV)       
+      CALL SDVREAD(STATEV,FRAC0,RU0,VV)       
 C----------------------------------------------------------------------
 C---------------------------- KINEMATICS ------------------------------
 C----------------------------------------------------------------------
@@ -596,6 +634,7 @@ C     STRAIN-ENERGY
       CALL VOL(SSEV,PV,PPV,K,DET)
 C
 C---- ISOCHORIC ISOTROPIC ---------------------------------------------
+      IF (PHI.LT.ONE) THEN
 C     STRAIN-ENERGY
       CALL ISOMAT(SSEISO,DISO,C10,C01,CBARI1,CBARI2)
 C     PK2 'FICTICIOUS' STRESS TENSOR
@@ -608,21 +647,36 @@ C     'FICTICIOUS' MATERIAL ELASTICITY TENSOR
 C     'FICTICIOUS' SPATIAL ELASTICITY TENSOR
       CALL CSISOMATFIC(CISOMATFIC,CMISOMATFIC,DISTGR,DET,NDI)
 C
+      ENDIF
 C---- FILAMENTS NETWORK -----------------------------------------------
 C     IMAGINARY ERROR FUNCTION BASED ON DISPERSION PARAMETER
-C      CALL ERFI(EFI,BB,NTERM)
-C
-C     'FICTICIOUS' PK2 STRESS AND MATERIAL ELASTICITY TENSORS
-C      CALL NAFFMATNETFIC(PKNETFICNAF,CMNETFICNAF,DISTGR,MF0,RW,FILPROPS,
-C     1                               NAFFPROPS,DET,NDI)
-C     'FICTICIOUS' CAUCHY STRESS AND SPATIAL ELASTICITY TENSORS
+      CALL ERFI(EFI,BB,NTERM)
+C------------ NONAFFINE NETWORK --------------
+      IF (NN.GT.ZERO) THEN
       CALL NAFFNETFIC(SNETFICNAF,CNETFICNAF,DISTGR,MF0,RW,FILPROPS,
      1                                   NAFFPROPS,DET,NDI)
+      ENDIF
+C     'FICTICIOUS' PK2 STRESS AND MATERIAL ELASTICITY TENSORS
+C------------ AFFINE NETWORK --------------
+C     ***CONTRACTILE AFFINE***
+      IF (MM.GT.ZERO) THEN
+C     CHEMICAL STATES FOR FILAMENT CONTRACTION
+      CALL CHEMICALSTAT(FRAC,FRAC0,KCH,DTIME)
+C      frac(3)=0.214d0
+C      frac(3)=0.d0
+C      frac(4)=0.522d0
+C      frac(4)=0.d0
+
+C      CALL AFFMATNETFIC(PKNETFICAF,CMNETFICAF,DISTGR,MF0,RW,FILPROPS,
+C     1                         AFFPROPS,EFI,NOEL,DET,NDI)
+      CALL AFFACTNETFIC(SNETFICAF,CNETFICAF,DISTGR,MF0,RW,FILPROPS,
+     1        AFFPROPS,RU0,DTIME,FRAC,EFI,NOEL,VARACT,DIRMAX,DET,NDI)
+      ENDIF
 C
-C      PKNETFIC=PKNETFICAF+PKNETFICNAF
-      SNETFIC=SNETFICNAF
-C      CMNETFIC=CMNETFICAF+CMNETFICNAF
-      CNETFIC=CNETFICNAF
+C      PKNETFIC=PKNETFICNAF+PKNETFICAF
+      SNETFIC=SNETFICNAF+SNETFICAF
+C      CMNETFIC=CMNETFICNAF+CMNETFICAF
+      CNETFIC=CNETFICNAF+CNETFICAF
 C----------------------------------------------------------------------
 C     STRAIN-ENERGY
 C      SSE=SSEV+SSEISO
@@ -650,6 +704,10 @@ C      PK2 STRESS
       CALL PK2ISO(PKISO,PKFIC,PROJL,DET,NDI)
 C      CAUCHY STRESS
       CALL SIGISO(SISO,SFIC,PROJE,NDI)
+C      ACTIVE CAUCHY STRESS
+C      CALL SIGISO(SACTISO,SNETFICAF,PROJE,NDI)
+C     
+C      CALL SPECTRAL(SACTISO,SACTVL,SACTVC)
 C
 C---- VOLUMETRIC + ISOCHORIC ------------------------------------------
 C      PK2 STRESS
@@ -706,13 +764,36 @@ C--------------------------- STATE VARIABLES --------------------------
 C----------------------------------------------------------------------
 C     DO K1 = 1, NTENS
 C      STATEV(1:27) = VISCOUS TENSORS
-       CALL SDVWRITE(DET,STATEV)
+       CALL SDVWRITE(STATEV,FRAC,RU0,DET,VARACT,DIRMAX,VV)
 C     END DO
 C----------------------------------------------------------------------
       RETURN
       END
 C----------------------------------------------------------------------
 C--------------------------- END OF UMAT ------------------------------
+C----------------------------------------------------------------------
+C
+C----------------------------------------------------------------------
+C----------------------- AUXILIAR SUBROUTINES -------------------------
+C----------------------------------------------------------------------
+C                         INPUT FILES
+C----------------------------------------------------------------------
+C
+C----------------------------------------------------------------------
+C                         KINEMATIC QUANTITIES
+C----------------------------------------------------------------------
+C----------------------------------------------------------------------
+C                         STRESS TENSORS
+C----------------------------------------------------------------------
+C----------------------------------------------------------------------
+C                   LINEARISED ELASTICITY TENSORS
+C----------------------------------------------------------------------
+C
+C
+C----------------------------------------------------------------------
+C----------------------------------------------------------------------
+C----------------------------------------------------------------------
+C----------------------- UTILITY SUBROUTINES --------------------------
 C----------------------------------------------------------------------
 C
       SUBROUTINE CONTRACTION44(S,LT,RT,NDI)
@@ -750,7 +831,7 @@ C
 C
        RETURN
       END SUBROUTINE CONTRACTION44
-       SUBROUTINE INITIALIZE(STATEV)
+       SUBROUTINE INITIALIZE(STATEV,VV)
 C
       IMPLICIT NONE
       INCLUDE 'PARAM_UMAT.INC'
@@ -758,8 +839,20 @@ C
 C      DOUBLE PRECISION TIME(2),KSTEP
       INTEGER I1,POS,POS1,POS2,POS3,VV
       DOUBLE PRECISION STATEV(NSDV)
-C
-        POS1=0
+C        VISCOUS TENSORS
+       DO I1=1,VV
+        POS=9*I1-9
+        STATEV(1+POS)=ZERO
+        STATEV(2+POS)=ZERO
+        STATEV(3+POS)=ZERO
+        STATEV(4+POS)=ZERO
+        STATEV(5+POS)=ZERO
+        STATEV(6+POS)=ZERO
+        STATEV(7+POS)=ZERO
+        STATEV(8+POS)=ZERO
+        STATEV(9+POS)=ZERO
+       ENDDO
+       POS1=9*VV
 C       DETERMINANT        
           STATEV(POS1+1)=ONE
 C        CONTRACTION VARIANCE
@@ -792,6 +885,28 @@ C
 C      
       RETURN
       END SUBROUTINE SETVOL
+      SUBROUTINE HVWRITE(STATEV,HV,V1,NDI)
+C>    VISCOUS DISSIPATION: WRITE STATE VARS
+      IMPLICIT NONE
+      INCLUDE 'PARAM_UMAT.INC'
+C
+      INTEGER NDI,V1,POS
+      DOUBLE PRECISION HV(NDI,NDI),STATEV(NSDV)
+C
+        POS=9*V1-9
+        STATEV(1+POS)=HV(1,1)
+        STATEV(2+POS)=HV(1,2)
+        STATEV(3+POS)=HV(1,3)
+        STATEV(4+POS)=HV(2,1)
+        STATEV(5+POS)=HV(2,2)
+        STATEV(6+POS)=HV(2,3)
+        STATEV(7+POS)=HV(3,1)
+        STATEV(8+POS)=HV(3,2)
+        STATEV(9+POS)=HV(3,3)
+C
+      RETURN
+C      
+      END SUBROUTINE HVWRITE
       SUBROUTINE PK2ISOMATFIC(FIC,DISO,CBAR,CBARI1,UNIT2,NDI)
 C>     ISOTROPIC MATRIX: 2PK 'FICTICIOUS' STRESS TENSOR
 C      INPUT:
@@ -835,10 +950,12 @@ C     UEXTERNAL just called once; work in parallel computing
       COMMON /KFIL/MF0
       COMMON /KFILR/RW
       COMMON /KFILP/PREFDIR
+      COMMON /KFILK/KCH
+      COMMON /KFILF/FRAC0
 C      
       DIMENSION TIME(2)
       DOUBLE PRECISION  SPHERE(NWP,5),MF0(NWP,3),RW(NWP),
-     1                  PREFDIR(NELEM,4)
+     1                  PREFDIR(NELEM,4),KCH(7),FRAC0(4),CHEM(2,7)
       CHARACTER(256) FILENAME
       CHARACTER(256) JOBDIR
 C     LOP=0 --> START OF THE ANALYSIS
@@ -868,12 +985,55 @@ C
          END DO
          CLOSE(16)
 C
+         FILENAME=JOBDIR(:LENJOBDIR)//'/'//DIR3
+         OPEN(17,FILE=FILENAME)
+         DO I=1,2
+            READ(17,*) (CHEM(I,J),J=1,7)
+         END DO   
+         DO J=1,4
+         FRAC0(J)=CHEM(1,J)
+         END DO
+         DO J=1,7
+         KCH(J)=CHEM(2,J)
+         END DO
+         CLOSE(17)
 C         
       END IF    
 C
       RETURN
 C
       END SUBROUTINE UEXTERNALDB
+       SUBROUTINE CONTRACTILE(FC,FFC,DW,DDW,FFCC,RU,RU0,LAMBDAC,LAMBDAP,
+     1                 LAMBDA0,L,R0,MU0,BETA,B0,FFCMAX,FRIC,FRAC,DTIME)       
+C
+      IMPLICIT NONE
+      INCLUDE 'PARAM_UMAT.INC'
+C
+      DOUBLE PRECISION DTIME,FRAC(4)
+      DOUBLE PRECISION FC,FFC,RU,RU0,DW,DDW,FFCC
+      DOUBLE PRECISION LAMBDAP,LAMBDAC,L,R0,MU0,BETA,B0,FRIC,FFCMAX
+      DOUBLE PRECISION LAMBDA0
+C      CHECK STRETCH
+        IF (RU0.GT.ZERO) THEN
+        LAMBDAC=LAMBDAP+RU0  
+        ELSE
+        LAMBDAC=LAMBDAP
+        ENDIF
+C        IF(LAMBDAC.LT.LAMBDAP)THEN
+C          LAMBDAC=LAMBDAP
+C           RU=ZERO
+C        ENDIF
+C        FORCE WITH CONTRACTION
+          CALL FIL(FC,FFC,DW,DDW,LAMBDAC,LAMBDA0,L,R0,MU0,BETA,B0)
+C        PASSIVE FORCE          
+C          CALL FIL(FC,FFC,DW,DDW,LAMBDAP,LAMBDA0,L,R0,MU0,BETA,B0)
+C        RELATIVE SLIDING          
+          CALL SLIDING(FFCC,RU,FFC,RU0,FFCMAX,FRIC,FRAC,DTIME)
+C
+      RETURN
+C
+      END SUBROUTINE CONTRACTILE
+
       SUBROUTINE SIGISOMATFIC(SFIC,PKFIC,F,DET,NDI)
 C>    ISOTROPIC MATRIX:  ISOCHORIC CAUCHY STRESS 
       IMPLICIT NONE
@@ -1416,6 +1576,29 @@ C
 C
       RETURN
       END SUBROUTINE EIGSRT
+      SUBROUTINE CSFILFIC(CFIC,RHO,LAMBDA,DW,DDW,M,RW,NDI)
+C>    AFFINE NETWORK: 'FICTICIOUS' ELASTICITY TENSOR
+      IMPLICIT NONE
+      INCLUDE 'PARAM_UMAT.INC'
+C
+      INTEGER NDI,I1,J1,K1,L1
+      DOUBLE PRECISION CFIC(NDI,NDI,NDI,NDI),M(NDI)
+      DOUBLE PRECISION RHO,AUX,DW,DDW,RW,LAMBDA,AUX0
+C
+      AUX0=DDW-(LAMBDA**(-ONE))*DW
+      AUX=RHO*AUX0*RW*(LAMBDA**(-TWO))
+      DO I1=1,NDI
+       DO J1=1,NDI
+        DO K1=1,NDI
+         DO L1=1,NDI
+          CFIC(I1,J1,K1,L1)=AUX*M(I1)*M(J1)*M(K1)*M(L1)
+         END DO
+        END DO
+       END DO
+      END DO
+C
+      RETURN
+      END SUBROUTINE CSFILFIC
       SUBROUTINE CONTRACTION24(S,LT,RT,NDI)
 C>       DOUBLE CONTRACTION BETWEEN 4TH ORDER AND 2ND ORDER  TENSOR
 C>      INPUT:
@@ -1837,18 +2020,332 @@ C
 C
       RETURN      
       END SUBROUTINE FSLIP
-      SUBROUTINE SDVWRITE(DET,STATEV)
+      SUBROUTINE AFFMATNETFIC(PKFIC,CMFIC,F,MF0,RW,FILPROPS,AFFPROPS,
+     1                        EFI,NOEL,DET,NDI)
+C>    AFFINE NETWORK: 'FICTICIOUS' PK STRESS AND ELASTICITY TENSOR 
+      IMPLICIT NONE
+      INCLUDE 'PARAM_UMAT.INC'
+C
+      INTEGER NDI,I1,J1,K1,L1,M1,NOEL
+      DOUBLE PRECISION PKFIC(NDI,NDI),SFILFIC(NDI,NDI),
+     1                  CMFIC(NDI,NDI,NDI,NDI),F(NDI,NDI),MF0(NWP,NDI),
+     2                 RW(NWP),CFILFIC(NDI,NDI,NDI,NDI)
+      DOUBLE PRECISION FILPROPS(8),AFFPROPS(2),MFI(NDI),MF0I(NDI)
+      DOUBLE PRECISION DET,AUX,PI,LAMBDAI,DWI,DDWI,RWI,LAMBDAIC
+      DOUBLE PRECISION L,R0F,R0,MU0,B0,BETA,LAMBDA0,RHO,N,FI,FFI,DTIME
+      DOUBLE PRECISION R0C,ETAC,LAMBDAIF
+      DOUBLE PRECISION B,FRIC,FFMAX,ANG,EFI,FRAC(4),RU0(NWP),RU
+      DOUBLE PRECISION VARA,AVGA,MAXA,AUX0,FFIC,SUMA,RHO0,DIRMAX(NDI)
+
+C
+C     FILAMENT
+      L       = FILPROPS(1)
+      R0F     = FILPROPS(2)
+      R0C     = FILPROPS(3)
+      ETAC    = FILPROPS(4)      
+      MU0     = FILPROPS(5)
+      BETA    = FILPROPS(6)
+      B0      = FILPROPS(7)
+      LAMBDA0 = FILPROPS(8)
+C     NETWORK
+      N       = AFFPROPS(1)
+      B       = AFFPROPS(2)      
+C
+      PI=FOUR*ATAN(ONE)
+      AUX=N*(DET**(-ONE))*FOUR*PI
+      CMFIC=ZERO
+      PKFIC=ZERO
+C      
+       RHO=ONE
+       R0=R0F+R0C
+C  
+C        LOOP OVER THE INTEGRATION DIRECTIONS
+      DO I1=1,NWP
+C
+       MFI=ZERO
+       MF0I=ZERO
+       DO J1=1,NDI
+        MF0I(J1)=MF0(I1,J1)
+       END DO
+       RWI=RW(I1)
+C
+       CALL DEFFIL(LAMBDAI,MFI,MF0I,F,NDI)
+C
+       CALL BANGLE(ANG,F,MFI,NOEL,NDI)
+C      
+       CALL DENSITY(RHO,ANG,B,EFI)
+C
+       IF((ETAC.GT.ZERO).AND.(ETAC.LT.ONE))THEN
+C
+        LAMBDAIF=ETAC*(R0/R0F)*(LAMBDAI-ONE)+ONE
+        LAMBDAIC=(LAMBDAI*R0-LAMBDAIF*R0F)/R0C
+       ELSE
+        LAMBDAIF=LAMBDAI
+        LAMBDAIC=ZERO
+       ENDIF  
+C
+       CALL FIL(FI,FFI,DWI,DDWI,LAMBDAIF,LAMBDA0,L,R0,MU0,BETA,B0)
+C       
+       CALL SIGFILFIC(SFILFIC,RHO,LAMBDAIF,DWI,MF0I,RWI,NDI)
+C
+       CALL CSFILFIC(CFILFIC,RHO,LAMBDAIF,DWI,DDWI,MF0I,RWI,NDI)
+C
+       DO J1=1,NDI
+        DO K1=1,NDI
+         PKFIC(J1,K1)=PKFIC(J1,K1)+AUX*SFILFIC(J1,K1)
+         DO L1=1,NDI
+          DO M1=1,NDI
+          CMFIC(J1,K1,L1,M1)=CMFIC(J1,K1,L1,M1)+AUX*CFILFIC(J1,K1,L1,M1)
+          END DO
+         END DO
+        END DO
+       END DO
+C
+      END DO
+C
+      RETURN
+      END SUBROUTINE AFFMATNETFIC
+       SUBROUTINE SLIDING(FFC,RU,FFC0,RU0,FFCMAX,FRIC,FRAC,DTIME)
+C
+      IMPLICIT NONE
+      INCLUDE 'PARAM_UMAT.INC'
+C
+      DOUBLE PRECISION FFC,FFC0,RU,RU0
+C
+      DOUBLE PRECISION FRIC,FRAC(4),DTIME
+      DOUBLE PRECISION AUX0,AUX1,AUX2,FFCMAX,ARG
+C      INTEGER STATE
+C     
+      AUX1=FRAC(3)
+      AUX0=AUX1+FRAC(4)
+      AUX2=AUX0
+      ARG=FFC0/FFCMAX
+C
+      IF(ARG.LT.AUX1) THEN
+       FFC=AUX1*FFCMAX
+      ELSEIF (ARG.GT.AUX2)THEN
+       FFC=AUX2*FFCMAX
+      ELSE
+       FFC=FFC0
+      ENDIF
+C
+      RU=RU0+DTIME*(FRIC**(-ONE))*(FFC-FFC0)
+      RU0=RU
+C
+      RETURN
+C
+      END SUBROUTINE SLIDING
+      SUBROUTINE SDVWRITE(STATEV,FRAC,RU0,DET,VARACT,DIRMAX,VV)
 C>    VISCOUS DISSIPATION: WRITE STATE VARS
       IMPLICIT NONE
       INCLUDE 'PARAM_UMAT.INC'
 C
       INTEGER VV,POS1,POS2,POS3,I1
-      DOUBLE PRECISION STATEV(NSDV),DET
+      DOUBLE PRECISION STATEV(NSDV),DET,VARACT
+      DOUBLE PRECISION FRAC(4),RU0(NWP),DIRMAX(3)
 C
-        STATEV(1)=DET
+        POS1=9*VV 
+        DO I1=1,4
+         POS2=POS1+I1
+         STATEV(POS2)=FRAC(I1)
+        ENDDO
+C
+        DO I1=1,NWP
+          POS3=POS2+I1
+          STATEV(POS3)=RU0(I1)
+        ENDDO
+        STATEV(POS3+1)=DET
+        STATEV(POS3+2)=VARACT 
+        STATEV(POS3+3)=DIRMAX(1)
+        STATEV(POS3+4)=DIRMAX(2)
+        STATEV(POS3+5)=DIRMAX(3)
       RETURN
 C
       END SUBROUTINE SDVWRITE
+      SUBROUTINE VISCO(PK,CMAT,VV,PKVOL,PKISO,CMATVOL,CMATISO,DTIME,
+     1                                              VSCPROPS,STATEV,NDI)
+C>    VISCOUS DISSIPATION: MAXWELL SPRINGS AND DASHPOTS SCHEME
+      IMPLICIT NONE
+      INCLUDE 'PARAM_UMAT.INC'
+C
+      INTEGER I1,J1,K1,L1,NDI,VV,V1
+      DOUBLE PRECISION PK(NDI,NDI),PKVOL(NDI,NDI),PKISO(NDI,NDI),
+     1                  CMAT(NDI,NDI,NDI,NDI),CMATVOL(NDI,NDI,NDI,NDI),
+     2                  CMATISO(NDI,NDI,NDI,NDI),VSCPROPS(6)
+      DOUBLE PRECISION Q(NDI,NDI),QV(NDI,NDI),HV(NDI,NDI),
+     1                  HV0(NDI,NDI),STATEV(NSDV)
+      DOUBLE PRECISION DTIME,TETA,TAU,AUX,AUXC
+C      
+      Q=ZERO
+      QV=ZERO
+      HV=ZERO
+      AUXC=ZERO
+C      
+C     ( GENERAL MAXWELL DASHPOTS)
+      DO V1=1,VV 
+C      
+      TAU=VSCPROPS(2*V1-1)
+      TETA=VSCPROPS(2*V1)
+C
+C      READ STATE VARIABLES
+      CALL HVREAD(HV,STATEV,V1,NDI)
+      HV0=HV
+C        RALAXATION TENSORS      
+      CALL RELAX(QV,HV,AUX,HV0,PKISO,DTIME,TAU,TETA,NDI)
+      AUXC=AUXC+AUX     
+C        WRITE STATE VARIABLES      
+      CALL HVWRITE(STATEV,HV,V1,NDI)
+C
+      Q=Q+QV
+C
+      END DO
+C              
+      AUXC=ONE+AUXC
+      PK=PKVOL+PKISO
+C 
+      DO I1=1,NDI
+       DO J1=1,NDI
+        PK(I1,J1)=PK(I1,J1)+Q(I1,J1)
+        DO K1=1,NDI
+         DO L1=1,NDI
+          CMAT(I1,J1,K1,L1)= CMATVOL(I1,J1,K1,L1)+
+     1                        AUXC*CMATISO(I1,J1,K1,L1)
+         ENDDO
+        ENDDO
+       ENDDO
+      ENDDO
+      
+C
+C
+      RETURN
+      END SUBROUTINE VISCO
+      SUBROUTINE AFFACTNETFIC(SFIC,CFIC,F,MF0,RW,FILPROPS,AFFPROPS,RU0,
+     1                         DTIME,FRAC,EFI,NOEL,VARA,DIRMAX,DET,NDI)
+C>    AFFINE NETWORK: 'FICTICIOUS' CAUCHY STRESS AND ELASTICITY TENSOR 
+      IMPLICIT NONE
+      INCLUDE 'PARAM_UMAT.INC'
+C
+      INTEGER NDI,I1,J1,K1,L1,M1,NOEL,IM1
+      DOUBLE PRECISION SFIC(NDI,NDI),SFILFIC(NDI,NDI),
+     1                  CFIC(NDI,NDI,NDI,NDI),F(NDI,NDI),MF0(NWP,NDI),
+     2                 RW(NWP),CFILFIC(NDI,NDI,NDI,NDI)
+      DOUBLE PRECISION FILPROPS(8),AFFPROPS(4),MFI(NDI),MF0I(NDI)
+      DOUBLE PRECISION DET,AUX,PI,LAMBDAI,DWI,DDWI,RWI,LAMBDAIC
+      DOUBLE PRECISION L,R0,MU0,B0,BETA,LAMBDA0,RHO,M,FI,FFI,DTIME
+      DOUBLE PRECISION R0F,R0C,ETAC,LAMBDAIF,LAMBDAICL
+      DOUBLE PRECISION B,FRIC,FFMAX,ANG,EFI,FRAC(4),RU0(NWP),RU
+      DOUBLE PRECISION VARA,AVGA,MAXA,AUX0,FFIC,SUMA,RHO0,DIRMAX(NDI)
+      
+C
+C     FILAMENT
+      L       = FILPROPS(1)
+      R0F     = FILPROPS(2)
+      R0C     = FILPROPS(3)
+      ETAC    = FILPROPS(4)
+      MU0     = FILPROPS(5)
+      BETA    = FILPROPS(6)
+      B0      = FILPROPS(7)
+      LAMBDA0 = FILPROPS(8)
+C     NETWORK
+      M       = AFFPROPS(1)
+      B       = AFFPROPS(2)
+      FRIC    = AFFPROPS(3)
+      FFMAX   = AFFPROPS(4)
+C
+      PI=FOUR*ATAN(ONE)
+      AUX=M*(DET**(-ONE))*FOUR*PI
+      CFIC=ZERO
+      SFIC=ZERO
+C      
+       RHO=ONE
+       R0=R0F+R0C
+C       
+       AVGA=ZERO
+       MAXA=ZERO
+       SUMA=ZERO
+       DIRMAX=ZERO
+C       CALL DENSITY(RHO0,ZERO,B,EFI)
+C        
+C             OPEN (UNIT=20,FILE="projfil.out",action="write",
+C     1 status="replace")
+     
+C        LOOP OVER THE INTEGRATION DIRECTIONS
+      DO I1=1,NWP
+C
+       MFI=ZERO
+       MF0I=ZERO
+       DO J1=1,NDI
+        MF0I(J1)=MF0(I1,J1)
+       END DO
+       RWI=RW(I1)
+C
+       CALL DEFFIL(LAMBDAI,MFI,MF0I,F,NDI)
+C
+       IF((ETAC.GT.ZERO).AND.(ETAC.LT.ONE))THEN
+C
+         LAMBDAIF=ETAC*(R0/R0F)*(LAMBDAI-ONE)+ONE
+         LAMBDAICL=(LAMBDAI*R0-LAMBDAIF*R0F)/R0C
+       ELSE
+         LAMBDAIF=LAMBDAI
+         LAMBDAICL=ZERO
+       ENDIF   
+C
+       RU=RU0(I1)
+       CALL CONTRACTILE(FI,FFI,DWI,DDWI,FFIC,RU,RU,LAMBDAIC,LAMBDAIF,
+     1                LAMBDA0,L,R0,MU0,BETA,B0,FFMAX,FRIC,FRAC,DTIME)       
+       RU0(I1)=RU
+C       write(*,*) i1,     LAMBDAIF, ru
+C        
+       CALL BANGLE(ANG,F,MFI,NOEL,NDI)
+C      
+       CALL DENSITY(RHO,ANG,B,EFI)
+C
+C        AUX0=(FFIC/FFMAX)*(RHO)
+        AUX0=RU*RHO
+C
+        IF (RU.GT.ZERO) THEN
+C        AVERAGE CONTRACTION LEVEL
+         AVGA=AVGA+AUX0
+         SUMA=SUMA+ONE
+        IF (AUX0.GT.MAXA) THEN
+C        MAXIMUM CONTRACTION LEVEL
+         MAXA = AUX0
+         DIRMAX=MFI
+         IM1=I1
+        ENDIF
+        ENDIF
+C       
+        CALL SIGFILFIC(SFILFIC,RHO,LAMBDAI,DWI,MFI,RWI,NDI)
+C
+        CALL CSFILFIC(CFILFIC,RHO,LAMBDAI,DWI,DDWI,MFI,RWI,NDI)
+C
+C
+      IF(RU.GT.ZERO)THEN      
+C
+       DO J1=1,NDI
+        DO K1=1,NDI
+         SFIC(J1,K1)=SFIC(J1,K1)+AUX*SFILFIC(J1,K1)
+         DO L1=1,NDI
+          DO M1=1,NDI
+           CFIC(J1,K1,L1,M1)=CFIC(J1,K1,L1,M1)+AUX*CFILFIC(J1,K1,L1,M1)
+          END DO
+         END DO
+        END DO
+       END DO  
+C
+      ENDIF
+C             
+      END DO  
+C      close(20)
+C
+        IF (SUMA.GT.ZERO) THEN
+         AVGA=AVGA/NWP
+        ENDIF
+        VARA=(MAXA-AVGA)/MAXA
+C        WRITE(*,*) VARA,MAXA,IM1,SUMA
+C        
+      RETURN
+      END SUBROUTINE AFFACTNETFIC
       SUBROUTINE BANGLE(ANG,F,MF,NOEL,NDI)
 C>    ANGLE BETWEEN FILAMENT AND PREFERED DIRECTION
       IMPLICIT NONE
@@ -1910,6 +2407,42 @@ C
       RETURN
       END SUBROUTINE BANGLE
 
+       SUBROUTINE CHEMICALSTAT(FRAC,FRAC0,K,DTIME)
+C
+      IMPLICIT NONE
+      INCLUDE 'PARAM_UMAT.INC'
+C
+      DOUBLE PRECISION FRAC(4),FRAC0(4),STIFF(4,4),K(7)
+C
+      DOUBLE PRECISION DTIME,AUX
+      INTEGER I1,J1
+C
+        FRAC=ZERO
+        STIFF=ZERO
+        STIFF(1,1)=-K(1)
+        STIFF(1,2)=K(2)
+        STIFF(1,4)=K(7)
+        STIFF(2,1)=K(1)
+        STIFF(2,2)=-K(2)-K(3)
+        STIFF(2,3)=K(4)
+        STIFF(3,2)=K(3)
+        STIFF(3,3)=-K(4)-K(5)
+        STIFF(3,4)=K(6)
+        STIFF(4,3)=K(5)
+        STIFF(4,4)=-K(6)-K(7)
+C        
+      DO I1=1,4
+        AUX=ZERO
+       DO J1=1,4
+          AUX=AUX+STIFF(I1,J1)*FRAC0(J1)
+       ENDDO
+       FRAC(I1)=AUX*DTIME+FRAC0(I1)
+      ENDDO        
+C      
+C      FRAC0=FRAC
+C
+      RETURN
+      END SUBROUTINE CHEMICALSTAT
       SUBROUTINE INDEXX(STRESS,DDSDDE,SIG,TNG,NTENS,NDI)
 C>    INDEXATION: FULL SIMMETRY  IN STRESSES AND ELASTICITY TENSORS
       IMPLICIT NONE
@@ -2039,6 +2572,30 @@ C
 C
       RETURN
       END SUBROUTINE PROJLAG
+      SUBROUTINE RELAX(QV,HV,AUX1,HV0,PKISO,DTIME,TAU,TETA,NDI)
+C>    VISCOUS DISSIPATION: STRESS RELAXATION TENSORS
+      IMPLICIT NONE
+      INCLUDE 'PARAM_UMAT.INC'
+C
+      INTEGER I1,J1,NDI
+      DOUBLE PRECISION QV(NDI,NDI),HV(NDI,NDI),PKISO(NDI,NDI),
+     1                 HV0(NDI,NDI)
+      DOUBLE PRECISION DTIME,TETA,TAU,AUX1,AUX
+C
+      QV=ZERO
+      HV=ZERO
+
+       AUX=DEXP(-DTIME*((TWO*TAU)**(-ONE)))
+       AUX1=TETA*AUX
+       DO I1=1,NDI
+        DO J1=1,NDI
+         QV(I1,J1)=HV0(I1,J1)+AUX1*PKISO(I1,J1)
+         HV(I1,J1)=AUX*(AUX*QV(I1,J1)-TETA*PKISO(I1,J1))
+        END DO
+       END DO
+C      
+      RETURN
+      END SUBROUTINE RELAX
       SUBROUTINE DENSITY(RHO,ANG,BB,ERFI)
 C>    SINGLE FILAMENT: DENSITY FUNCTION VALUE
       IMPLICIT NONE
@@ -2070,3 +2627,25 @@ C
 C
       RETURN
       END SUBROUTINE CSISOMATFIC
+      SUBROUTINE HVREAD(HV,STATEV,V1,NDI)
+C>    VISCOUS DISSIPATION: READ STATE VARS
+      IMPLICIT NONE
+      INCLUDE 'PARAM_UMAT.INC'
+C
+      INTEGER NDI,V1,POS
+      DOUBLE PRECISION HV(NDI,NDI),STATEV(NSDV)
+C
+        POS=9*V1-9
+        HV(1,1)=STATEV(1+POS)
+        HV(1,2)=STATEV(2+POS)
+        HV(1,3)=STATEV(3+POS)
+        HV(2,1)=STATEV(4+POS)
+        HV(2,2)=STATEV(5+POS)
+        HV(2,3)=STATEV(6+POS)
+        HV(3,1)=STATEV(7+POS)
+        HV(3,2)=STATEV(8+POS)
+        HV(3,3)=STATEV(9+POS)       
+C
+      RETURN
+C     
+      END SUBROUTINE HVREAD
