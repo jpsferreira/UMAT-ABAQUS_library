@@ -308,14 +308,9 @@ C---- ISOCHORIC -------------------------------------------------------
 C
       CALL SETISO(CISO,CFIC,PROJE,SISO,SFIC,UNIT2,NDI)
 C
-C-----JAUMMAN RATE ----------------------------------------------------
-C
-      CALL SETJR(CJR,SIGMA,UNIT2,NDI)
-C
-C----------------------------------------------------------------------
 C
 C     ELASTICITY TENSOR
-      DDSIGDDE=CVOL+CISO+CJR
+      DDSIGDDE=CVOL+CISO
 C----------------------------------------------------------------------
 C-------------------------- VISCOUS PART ------------------------------
 C----------------------------------------------------------------------
@@ -331,6 +326,11 @@ C      PUSH FORWARD OF STRESS AND ELASTICITY TENSOR
       CALL PUSH2(SIGMA,PK2,DFGRD1,DET,NDI)
 C
       CALL PUSH4(DDSIGDDE,DDPKDDE,DFGRD1,DET,NDI)
+C-----JAUMMAN RATE ----------------------------------------------------
+C
+      CALL SETJR(CJR,SIGMA,UNIT2,NDI)
+C
+C     UPDATE MATERIAL TANGENT 
       DDSIGDDE=DDSIGDDE+CJR
 C----------------------------------------------------------------------
 C------------------------- INDEX ALLOCATION ---------------------------
