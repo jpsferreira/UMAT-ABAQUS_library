@@ -20,8 +20,7 @@ C----------------------------------------------------------------------
 C--------------------------- DECLARATIONS -----------------------------
 C----------------------------------------------------------------------
       IMPLICIT NONE
-      use global
-implicit none
+      INCLUDE 'PARAM_UMAT.INC'
 C     FILAMENTS DIRECTION
       COMMON /KFIL/MF0
 C     FILAMENTS WEIGHT      

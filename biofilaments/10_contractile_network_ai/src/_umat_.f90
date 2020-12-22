@@ -18,10 +18,6 @@ SUBROUTINE umat(stress,statev,ddsdde,sse,spd,scd, rpl,ddsddt,drplde,drpldt,  &
 !
 use global  
 IMPLICIT NONE
-!     FILAMENTS DIRECTION
-COMMON /kfil/mf0
-!     FILAMENTS WEIGHT
-COMMON /kfilr/rw
 !     PREFERED DIRETION
 COMMON /kfilp/prefdir
 !     CHEMICAL DYNAMICS MATRIX
@@ -93,7 +89,7 @@ DOUBLE PRECISION :: c10,c01,sseiso,diso(5),pkmatfic(ndi,ndi),  &
     smatfic(ndi,ndi),sisomatfic(ndi,ndi), cmisomatfic(ndi,ndi,ndi,ndi),  &
     cisomatfic(ndi,ndi,ndi,ndi)
 !     FILAMENTS NETWORK CONTRIBUTION
-DOUBLE PRECISION :: mf0(nwp,3),rw(nwp),filprops(8), naffprops(2),affprops(4)
+DOUBLE PRECISION :: filprops(8), naffprops(2),affprops(4)
 DOUBLE PRECISION :: ll,lambda0,mu0,beta,nn,mm,b0,bb
 DOUBLE PRECISION :: phi,p,r0c,r0f,etac
 DOUBLE PRECISION :: pknetfic(ndi,ndi),cmnetfic(ndi,ndi,ndi,ndi)
@@ -105,7 +101,7 @@ DOUBLE PRECISION :: cnetficaf(ndi,ndi,ndi,ndi), cnetficnaf(ndi,ndi,ndi,ndi)
 DOUBLE PRECISION :: efi
 INTEGER :: nterm,factor
 !     CONTRACTILE FILAMENT
-DOUBLE PRECISION :: fric,ffmax,frac0(4),frac(4),kch(7),ru0(720),  &
+DOUBLE PRECISION :: fric,ffmax,frac0(4),frac(4),kch(7),ru0(nwp),  &
     prefdir(nelem,4),varact,dirmax(ndi)
 
 !     JAUMMAN RATE CONTRIBUTION (REQUIRED FOR ABAQUS UMAT)

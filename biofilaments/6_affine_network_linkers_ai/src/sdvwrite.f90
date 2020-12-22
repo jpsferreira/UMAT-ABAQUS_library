@@ -1,20 +1,15 @@
-SUBROUTINE sdvwrite(statev,phi_tau,cr,stress)
-
-
-
+SUBROUTINE sdvwrite(det,statev)
 !>    VISCOUS DISSIPATION: WRITE STATE VARS
 use global
-IMPLICIT NONE
+implicit none
 
-!DOUBLE PRECISION, INTENT(IN OUT)         :: det
+INTEGER :: pos1
+!
+DOUBLE PRECISION, INTENT(IN)             :: det
 DOUBLE PRECISION, INTENT(OUT)            :: statev(nsdv)
-!DOUBLE PRECISION, INTENT(IN OUT)         :: dirmax(3)
-DOUBLE PRECISION, INTENT(IN)             :: phi_tau,cr,stress
-!DOUBLE PRECISION, INTENT(IN OUT)         :: dmudx(3,1)
-
-statev(1)=phi_tau
-statev(2)=cr
-statev(3)=stress
+!
+pos1=0
+statev(pos1+1)=det
 
 RETURN
 

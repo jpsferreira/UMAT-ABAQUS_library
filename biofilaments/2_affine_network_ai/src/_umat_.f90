@@ -18,15 +18,10 @@ SUBROUTINE umat(stress,statev,ddsdde,sse,spd,scd, rpl,ddsddt,drplde,drpldt,  &
 !
 use global  
 IMPLICIT NONE
-!     FILAMENTS DIRECTION
-COMMON /kfil/mf0
-!     FILAMENTS WEIGHT
-COMMON /kfilr/rw
+
 !     PREFERED DIRETION
 COMMON /kfilp/prefdir
-!     CHEMICAL DYNAMICS MATRIX
-COMMON /kfilf/frac0
-COMMON /kfilk/kch
+
 !----------------------------------------------------------------------
 !--------------------------- DECLARATIONS -----------------------------
 !----------------------------------------------------------------------
@@ -93,9 +88,9 @@ DOUBLE PRECISION :: c10,c01,sseiso,diso(5),pkmatfic(ndi,ndi),  &
     smatfic(ndi,ndi),sisomatfic(ndi,ndi), cmisomatfic(ndi,ndi,ndi,ndi),  &
     cisomatfic(ndi,ndi,ndi,ndi)
 !     FILAMENTS NETWORK CONTRIBUTION
-DOUBLE PRECISION :: mf0(nwp,3),rw(nwp),filprops(6), affprops(2)
-DOUBLE PRECISION :: ll,lambda0,mu0,beta,nn,mm,b0,bb
-DOUBLE PRECISION :: phi,p,r0
+DOUBLE PRECISION :: filprops(6), affprops(2)
+DOUBLE PRECISION :: ll,lambda0,mu0,beta,nn,b0,bb
+DOUBLE PRECISION :: phi,r0
 DOUBLE PRECISION :: pknetfic(ndi,ndi),cmnetfic(ndi,ndi,ndi,ndi)
 DOUBLE PRECISION :: snetfic(ndi,ndi),cnetfic(ndi,ndi,ndi,ndi)
 DOUBLE PRECISION :: pknetficaf(ndi,ndi),pknetficnaf(ndi,ndi)
@@ -105,7 +100,7 @@ DOUBLE PRECISION :: cnetficaf(ndi,ndi,ndi,ndi), cnetficnaf(ndi,ndi,ndi,ndi)
 DOUBLE PRECISION :: efi
 INTEGER :: nterm,factor
 !     CONTRACTILE FILAMENT
-DOUBLE PRECISION :: fric,ffmax,frac0(4),frac(4),kch(7),ru0(720),  &
+DOUBLE PRECISION :: frac0(4),frac(4),kch(7),ru0(720),  &
     prefdir(nelem,4),varact,dirmax(ndi)
 
 !     JAUMMAN RATE CONTRIBUTION (REQUIRED FOR ABAQUS UMAT)
@@ -202,7 +197,7 @@ beta     = props(8)
 b0       = props(9)
 lambda0  = props(10)
 filprops = props(5:10)
-!     NONAFFINE NETWORK
+!     AFFINE NETWORK
 nn       = props(11)
 bb        = props(12)
 affprops= props(11:12)
@@ -210,6 +205,7 @@ affprops= props(11:12)
 
 !     NUMERICAL COMPUTATIONS
 nterm    = 60
+factor = 6
 
 !        STATE VARIABLES AND CHEMICAL PARAMETERS
 
@@ -217,7 +213,7 @@ IF ((time(1) == zero).AND.(kstep == 1)) THEN
   CALL initialize(statev)
 END IF
 !        READ STATEV
-CALL sdvread(frac0,ru0,statev)
+CALL sdvread(statev)
 !----------------------------------------------------------------------
 !---------------------------- KINEMATICS ------------------------------
 !----------------------------------------------------------------------
@@ -247,7 +243,7 @@ CALL projlag(c,unit4,projl,ndi)
 !---- VOLUMETRIC ------------------------------------------------------
 !     STRAIN-ENERGY
 CALL vol(ssev,pv,ppv,k,det)
-
+!
 !---- ISOCHORIC ISOTROPIC ---------------------------------------------
 IF (phi < one) THEN
 !     STRAIN-ENERGY
@@ -262,7 +258,6 @@ IF (phi < one) THEN
   CALL csisomatfic(cisomatfic,cmisomatfic,distgr,det,ndi)
   
 END IF
-factor = 6
 !---- FILAMENTS NETWORK -----------------------------------------------
 !     IMAGINARY ERROR FUNCTION BASED ON DISPERSION PARAMETER
 CALL erfi(efi,bb,nterm)
@@ -364,7 +359,7 @@ CALL indexx(stress,ddsdde,sigma,ddsigdde,ntens,ndi)
 !----------------------------------------------------------------------
 !     DO K1 = 1, NTENS
 !      STATEV(1:27) = VISCOUS TENSORS
-CALL sdvwrite(frac,ru0,det,varact,dirmax,statev)
+CALL sdvwrite(det,statev)
 !     END DO
 !----------------------------------------------------------------------
 RETURN

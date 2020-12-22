@@ -23,19 +23,16 @@ module global
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! Set the control parameters to run the material-related routines
 
-INTEGER NWP,NELEM,NCH,NCNT,NSDV,NVSC,NMECH,NQUEM
+INTEGER NELEM, NSDV
 PARAMETER (NELEM=1)
-PARAMETER (NWP=21,NVSC=27,NMECH=1,NCH=4,NCNT=4,NQUEM=5)
-!      PARAMETER (NSDV=NWP+NCH+NVSC+NMECH+NCNT+NQUEM)
-PARAMETER (NSDV=4+NWP+1+1+3)
+PARAMETER (NSDV=1)
 DOUBLE PRECISION  ONE, TWO, THREE, FOUR, SIX, ZERO
 PARAMETER (ZERO=0.D0, ONE=1.0D0,TWO=2.0D0)
 PARAMETER (THREE=3.0D0,FOUR=4.0D0,SIX=6.0D0)
 DOUBLE PRECISION HALF,THIRD
 PARAMETER (HALF=0.5d0,THIRD=1.d0/3.d0)
-CHARACTER(256) DIR2,DIR3
+CHARACTER(256) DIR2
 PARAMETER (DIR2='prefdir.inp')
-PARAMETER (DIR3='initial_cond.inp')
 
 
 END module global!>********************************************************************
@@ -58,15 +55,10 @@ SUBROUTINE umat(stress,statev,ddsdde,sse,spd,scd, rpl,ddsddt,drplde,drpldt,  &
 !
 use global  
 IMPLICIT NONE
-!     FILAMENTS DIRECTION
-COMMON /kfil/mf0
-!     FILAMENTS WEIGHT
-COMMON /kfilr/rw
+
 !     PREFERED DIRETION
 COMMON /kfilp/prefdir
-!     CHEMICAL DYNAMICS MATRIX
-COMMON /kfilf/frac0
-COMMON /kfilk/kch
+
 !----------------------------------------------------------------------
 !--------------------------- DECLARATIONS -----------------------------
 !----------------------------------------------------------------------
@@ -133,9 +125,9 @@ DOUBLE PRECISION :: c10,c01,sseiso,diso(5),pkmatfic(ndi,ndi),  &
     smatfic(ndi,ndi),sisomatfic(ndi,ndi), cmisomatfic(ndi,ndi,ndi,ndi),  &
     cisomatfic(ndi,ndi,ndi,ndi)
 !     FILAMENTS NETWORK CONTRIBUTION
-DOUBLE PRECISION :: mf0(nwp,3),rw(nwp),filprops(6), affprops(2)
-DOUBLE PRECISION :: ll,lambda0,mu0,beta,nn,mm,b0,bb
-DOUBLE PRECISION :: phi,p,r0
+DOUBLE PRECISION :: filprops(6), affprops(2)
+DOUBLE PRECISION :: ll,lambda0,mu0,beta,nn,b0,bb
+DOUBLE PRECISION :: phi,r0
 DOUBLE PRECISION :: pknetfic(ndi,ndi),cmnetfic(ndi,ndi,ndi,ndi)
 DOUBLE PRECISION :: snetfic(ndi,ndi),cnetfic(ndi,ndi,ndi,ndi)
 DOUBLE PRECISION :: pknetficaf(ndi,ndi),pknetficnaf(ndi,ndi)
@@ -145,7 +137,7 @@ DOUBLE PRECISION :: cnetficaf(ndi,ndi,ndi,ndi), cnetficnaf(ndi,ndi,ndi,ndi)
 DOUBLE PRECISION :: efi
 INTEGER :: nterm,factor
 !     CONTRACTILE FILAMENT
-DOUBLE PRECISION :: fric,ffmax,frac0(4),frac(4),kch(7),ru0(720),  &
+DOUBLE PRECISION :: frac0(4),frac(4),kch(7),ru0(720),  &
     prefdir(nelem,4),varact,dirmax(ndi)
 
 !     JAUMMAN RATE CONTRIBUTION (REQUIRED FOR ABAQUS UMAT)
@@ -242,7 +234,7 @@ beta     = props(8)
 b0       = props(9)
 lambda0  = props(10)
 filprops = props(5:10)
-!     NONAFFINE NETWORK
+!     AFFINE NETWORK
 nn       = props(11)
 bb        = props(12)
 affprops= props(11:12)
@@ -250,6 +242,7 @@ affprops= props(11:12)
 
 !     NUMERICAL COMPUTATIONS
 nterm    = 60
+factor = 6
 
 !        STATE VARIABLES AND CHEMICAL PARAMETERS
 
@@ -257,7 +250,7 @@ IF ((time(1) == zero).AND.(kstep == 1)) THEN
   CALL initialize(statev)
 END IF
 !        READ STATEV
-CALL sdvread(frac0,ru0,statev)
+CALL sdvread(statev)
 !----------------------------------------------------------------------
 !---------------------------- KINEMATICS ------------------------------
 !----------------------------------------------------------------------
@@ -287,7 +280,7 @@ CALL projlag(c,unit4,projl,ndi)
 !---- VOLUMETRIC ------------------------------------------------------
 !     STRAIN-ENERGY
 CALL vol(ssev,pv,ppv,k,det)
-
+!
 !---- ISOCHORIC ISOTROPIC ---------------------------------------------
 IF (phi < one) THEN
 !     STRAIN-ENERGY
@@ -302,7 +295,6 @@ IF (phi < one) THEN
   CALL csisomatfic(cisomatfic,cmisomatfic,distgr,det,ndi)
   
 END IF
-factor = 6
 !---- FILAMENTS NETWORK -----------------------------------------------
 !     IMAGINARY ERROR FUNCTION BASED ON DISPERSION PARAMETER
 CALL erfi(efi,bb,nterm)
@@ -404,7 +396,7 @@ CALL indexx(stress,ddsdde,sigma,ddsigdde,ntens,ndi)
 !----------------------------------------------------------------------
 !     DO K1 = 1, NTENS
 !      STATEV(1:27) = VISCOUS TENSORS
-CALL sdvwrite(frac,ru0,det,varact,dirmax,statev)
+CALL sdvwrite(det,statev)
 !     END DO
 !----------------------------------------------------------------------
 RETURN
@@ -436,594 +428,7 @@ END SUBROUTINE umat
 !----------------------- UTILITY SUBROUTINES --------------------------
 !----------------------------------------------------------------------
 
-SUBROUTINE affactnetfic_bazant(sfic,cfic,f,mf0,rw,filprops,affprops,ru0,  &
-        dtime,frac,efi,noel,vara,dirmax,det,ndi)
-! 
-use global       
-IMPLICIT NONE
-!
-
-!>    AFFINE NETWORK: 'FICTICIOUS' CAUCHY STRESS AND ELASTICITY TENSOR
-DOUBLE PRECISION, INTENT(IN OUT)         :: det
-INTEGER, INTENT(IN)                      :: ndi
-INTEGER :: i1,j1,k1,l1,m1, im1
-DOUBLE PRECISION :: sfilfic(ndi,ndi),   &
-     cfilfic(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION :: mfi(ndi),mf0i(ndi)
-DOUBLE PRECISION :: aux,pi,lambdai,dwi,ddwi,rwi,lambdaic
-DOUBLE PRECISION :: l,r0,mu0,b0,beta,lambda0,rho,m,fi,ffi
-DOUBLE PRECISION :: r0f,r0c,etac,lambdaif,lambdaicl
-DOUBLE PRECISION :: b,fric,ffmax,ang, ru
-DOUBLE PRECISION :: avga,maxa,aux0,ffic,suma
-
-!
-DOUBLE PRECISION, INTENT(OUT)            :: sfic(ndi,ndi)
-DOUBLE PRECISION, INTENT(OUT)            :: cfic(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION, INTENT(IN OUT)         :: f(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: mf0(nwp,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: rw(nwp)
-DOUBLE PRECISION, INTENT(IN)             :: filprops(8)
-DOUBLE PRECISION, INTENT(IN)             :: affprops(4)
-DOUBLE PRECISION, INTENT(IN OUT)         :: ru0(nwp)
-DOUBLE PRECISION, INTENT(IN OUT)         :: dtime
-DOUBLE PRECISION, INTENT(IN OUT)         :: frac(4)
-DOUBLE PRECISION, INTENT(IN OUT)         :: efi
-INTEGER, INTENT(IN OUT)                  :: noel
-DOUBLE PRECISION, INTENT(OUT)            :: vara
-DOUBLE PRECISION, INTENT(OUT)            :: dirmax(ndi)
-
-
-!
-!     FILAMENT
-l       = filprops(1)
-r0f     = filprops(2)
-r0c     = filprops(3)
-etac    = filprops(4)
-mu0     = filprops(5)
-beta    = filprops(6)
-b0      = filprops(7)
-lambda0 = filprops(8)
-!     NETWORK
-m       = affprops(1)
-b       = affprops(2)
-fric    = affprops(3)
-ffmax   = affprops(4)
-
-pi=four*ATAN(one)
-aux=m*(det**(-one))*four*pi
-cfic=zero
-sfic=zero
-
-rho=one
-r0=r0f+r0c
-
-avga=zero
-maxa=zero
-suma=zero
-dirmax=zero
-!       CALL DENSITY(RHO0,ZERO,B,EFI)
-
-!             OPEN (UNIT=20,FILE="projfil.out",action="write",
-!     1 status="replace")
-
-!        LOOP OVER THE INTEGRATION DIRECTIONS
-DO i1=1,nwp
-  
-  mfi=zero
-  mf0i=zero
-  DO j1=1,ndi
-    mf0i(j1)=mf0(i1,j1)
-  END DO
-  rwi=rw(i1)
-  
-  CALL deffil(lambdai,mfi,mf0i,f,ndi)
-  
-  IF((etac > zero).AND.(etac < one))THEN
-    
-    lambdaif=etac*(r0/r0f)*(lambdai-one)+one
-    lambdaicl=(lambdai*r0-lambdaif*r0f)/r0c
-  ELSE
-    lambdaif=lambdai
-    lambdaicl=zero
-  END IF
-  
-  ru=ru0(i1)
-  CALL contractile(fi,ffi,dwi,ddwi,ffic,ru,ru,lambdaic,lambdaif,  &
-      lambda0,l,r0,mu0,beta,b0,ffmax,fric,frac,dtime)
-  ru0(i1)=ru
-!       write(*,*) i1,     LAMBDAIF, ru
-  
-  CALL bangle(ang,f,mfi,noel,ndi)
-  
-  CALL density(rho,ang,b,efi)
-  
-!        AUX0=(FFIC/FFMAX)*(RHO)
-  aux0=ru*rho
-  
-  IF (ru > zero) THEN
-!        AVERAGE CONTRACTION LEVEL
-    avga=avga+aux0
-    suma=suma+one
-    IF (aux0 > maxa) THEN
-!        MAXIMUM CONTRACTION LEVEL
-      maxa = aux0
-      dirmax=mfi
-      im1=i1
-    END IF
-  END IF
-  
-  CALL sigfilfic(sfilfic,rho,lambdai,dwi,mfi,rwi,ndi)
-  
-  CALL csfilfic(cfilfic,rho,lambdai,dwi,ddwi,mfi,rwi,ndi)
-  
-  
-  IF(ru > zero)THEN
-    
-    DO j1=1,ndi
-      DO k1=1,ndi
-        sfic(j1,k1)=sfic(j1,k1)+aux*sfilfic(j1,k1)
-        DO l1=1,ndi
-          DO m1=1,ndi
-            cfic(j1,k1,l1,m1)=cfic(j1,k1,l1,m1)+aux*cfilfic(j1,k1,l1,m1)
-          END DO
-        END DO
-      END DO
-    END DO
-    
-  END IF
-  
-END DO
-!      close(20)
-
-IF (suma > zero) THEN
-  avga=avga/nwp
-END IF
-vara=(maxa-avga)/maxa
-!        WRITE(*,*) VARA,MAXA,IM1,SUMA
-
-RETURN
-END SUBROUTINE affactnetfic_bazant
-SUBROUTINE affactnetfic_discrete(sfic,cfic,f,filprops,affprops,  &
-        ru0,dtime,frac,efi,noel,vara,dirmax,det,factor,ndi)
-
-!>    AFFINE NETWORK: 'FICTICIOUS' CAUCHY STRESS AND ELASTICITY TENSOR
-!> DISCRETE ANGULAR INTEGRATION SCHEME (icosahedron)
-use global
-IMPLICIT NONE
-
-INTEGER, INTENT(IN)                      :: ndi
-DOUBLE PRECISION, INTENT(OUT)            :: sfic(ndi,ndi)
-DOUBLE PRECISION, INTENT(OUT)            :: cfic(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION, INTENT(IN OUT)         :: f(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: filprops(8)
-DOUBLE PRECISION, INTENT(IN)             :: affprops(4)
-DOUBLE PRECISION, INTENT(IN OUT)         :: efi
-INTEGER, INTENT(IN OUT)                  :: noel
-DOUBLE PRECISION, INTENT(IN OUT)         :: det
-
-INTEGER :: j1,k1,l1,m1,im1,i1
-DOUBLE PRECISION :: sfilfic(ndi,ndi), cfilfic(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION :: mfi(ndi),mf0i(ndi)
-DOUBLE PRECISION :: aux,lambdai,dwi,ddwi,lambdaic
-DOUBLE PRECISION :: l,r0f,r0,mu0,b0,beta,lambda0,rho,m,fi,ffi,dtime
-DOUBLE PRECISION :: r0c,etac,lambdaif
-DOUBLE PRECISION :: bdisp,fric,ffmax,ang, frac(4),ru0(720),ru
-DOUBLE PRECISION :: vara,avga,maxa,aux0,ffic,suma,rho0,dirmax(ndi)
-
-! INTEGRATION SCHEME
-  integer ( kind = 4 ) node_num
-  integer ( kind = 4 ) a
-  real ( kind = 8 ) a_xyz(3)
-  real ( kind = 8 ) a2_xyz(3)
-  real ( kind = 8 ) ai !area of triangle i
-  real ( kind = 8 ) area_total
-  integer ( kind = 4 ) b
-  real ( kind = 8 ) b_xyz(3)
-  real ( kind = 8 ) b2_xyz(3)
-  integer ( kind = 4 ) c
-  real ( kind = 8 ) c_xyz(3)
-  real ( kind = 8 ) c2_xyz(3)
-  integer ( kind = 4 ) edge_num
-  integer ( kind = 4 ), allocatable, dimension ( :, : ) :: edge_point
-  integer ( kind = 4 ) f1
-  integer ( kind = 4 ) f2
-  integer ( kind = 4 ) f3
-  integer ( kind = 4 ) face
-  integer ( kind = 4 ) face_num
-  integer ( kind = 4 ), allocatable, dimension ( : ) :: face_order
-  integer ( kind = 4 ), allocatable, dimension ( :, : ) :: face_point
-  integer ( kind = 4 ) face_order_max
-  integer ( kind = 4 ) factor
-  !external             fun
-  real ( kind = 8 ) node_xyz(3)
-  real ( kind = 8 ), parameter :: pi = 3.141592653589793D+00
-  real ( kind = 8 ), allocatable, dimension ( :, : ) :: point_coord
-  integer ( kind = 4 ) point_num
-  real ( kind = 8 ) rr, aa
-  real ( kind = 8 ) v
-
-
-
-!  Size the icosahedron.
-!
-  call icos_size ( point_num, edge_num, face_num, face_order_max )
-!
-!  Set the icosahedron.
-!
-  allocate ( point_coord(1:3,1:point_num) )
-  allocate ( edge_point(1:2,1:edge_num) )
-  allocate ( face_order(1:face_num) )
-  allocate ( face_point(1:face_order_max,1:face_num) )
-
-  call icos_shape ( point_num, edge_num, face_num, face_order_max, &
-    point_coord, edge_point, face_order, face_point )
-!
-!  Initialize the integral data.
-!
-  rr = 0.0D+00
-  area_total = 0.0D+00
-  node_num = 0
-  
-
-!! initialize the model data
-  !     FILAMENT
-l       = filprops(1)
-r0f     = filprops(2)
-r0c     = filprops(3)
-etac    = filprops(4)
-mu0     = filprops(5)
-beta    = filprops(6)
-b0      = filprops(7)
-lambda0 = filprops(8)
-!     NETWORK
-m       = affprops(1)
-bdisp       = affprops(2)
-fric    = affprops(3)
-ffmax   = affprops(4)
-
-  aux=m*(det**(-one))
-  cfic=zero
-  sfic=zero
-
-  rho=one
-  r0=r0f+r0c
-
-  aa = zero
-  avga=zero
-  maxa=zero
-  suma=zero
-  dirmax=zero
-
-!  Pick a face of the icosahedron, and identify its vertices as A, B, C.
-!
-  do face = 1, face_num
-!
-    a = face_point(1,face)
-    b = face_point(2,face)
-    c = face_point(3,face)
-!
-    a_xyz(1:3) = point_coord(1:3,a)
-    b_xyz(1:3) = point_coord(1:3,b)
-    c_xyz(1:3) = point_coord(1:3,c)
-!
-!  Some subtriangles will have the same direction as the face.
-!  Generate each in turn, by determining the barycentric coordinates
-!  of the centroid (F1,F2,F3), from which we can also work out the barycentric
-!  coordinates of the vertices of the subtriangle.
-!
-    do f3 = 1, 3 * factor - 2, 3
-      do f2 = 1, 3 * factor - f3 - 1, 3
-        !update triangle centroid index
-        node_num = node_num + 1 
-        f1 = 3 * factor - f3 - f2
-        call sphere01_triangle_project ( a_xyz, b_xyz, c_xyz, f1, f2, f3, &
-          node_xyz )
-
-        call sphere01_triangle_project ( &
-          a_xyz, b_xyz, c_xyz, f1 + 2, f2 - 1, f3 - 1, a2_xyz )
-        call sphere01_triangle_project ( &
-          a_xyz, b_xyz, c_xyz, f1 - 1, f2 + 2, f3 - 1, b2_xyz )
-        call sphere01_triangle_project ( &
-          a_xyz, b_xyz, c_xyz, f1 - 1, f2 - 1, f3 + 2, c2_xyz )
-
-        call sphere01_triangle_vertices_to_area ( a2_xyz, b2_xyz, c2_xyz, ai )
-
-        !direction of the sphere triangle barycenter - direction i
-        mf0i=node_xyz
-        CALL deffil(lambdai,mfi,mf0i,f,ndi)
-
-  
-        IF((etac > zero).AND.(etac < one))THEN
-            lambdaif=etac*(r0/r0f)*(lambdai-one)+one
-            lambdaic=(lambdai*r0-lambdaif*r0f)/r0c
-        ELSE
-            lambdaif=lambdai
-            lambdaic=zero
-        END IF
-          
-        ru=ru0(node_num)
-        CALL contractile(fi,ffi,dwi,ddwi,ffic,ru,ru,lambdaic,lambdaif,  &
-            lambda0,l,r0,mu0,beta,b0,ffmax,fric,frac,dtime)
-        ru0(node_num)=ru
-      !       write(*,*) i1,     LAMBDAIF, ru
-        
-        CALL bangle(ang,f,mfi,noel,ndi)
-        
-        CALL density(rho,ang,bdisp,efi)
-        
-      !        AUX0=(FFIC/FFMAX)*(RHO)
-        aux0=ru*rho
-        
-        IF (ru > zero) THEN
-      !        AVERAGE CONTRACTION LEVEL
-          avga=avga+aux0
-          suma=suma+one
-          IF (aux0 > maxa) THEN
-      !        MAXIMUM CONTRACTION LEVEL
-            maxa = aux0
-            dirmax=mfi
-            im1=i1
-          END IF
-        END IF
-        
-        CALL sigfilfic(sfilfic,rho,lambdaif,dwi,mfi,ai,ndi)
-  
-        CALL csfilfic(cfilfic,rho,lambdaif,dwi,ddwi,mfi,ai,ndi)
-  
-  
-        IF(ru > zero)THEN
-          
-          DO j1=1,ndi
-            DO k1=1,ndi
-              sfic(j1,k1)=sfic(j1,k1)+aux*sfilfic(j1,k1)
-              DO l1=1,ndi
-                DO m1=1,ndi
-                  cfic(j1,k1,l1,m1)=cfic(j1,k1,l1,m1)+aux*cfilfic(j1,k1,l1,m1)
-                END DO
-              END DO
-            END DO
-          END DO
-          
-        END IF
-        
-        !v=dwi
-        !node_num = node_num + 1
-        !rr = rr + ai * v
-        !area_total = area_total + ai
-
-      end do
-    end do
-!
-!  The other subtriangles have the opposite direction from the face.
-!  Generate each in turn, by determining the barycentric coordinates
-!  of the centroid (F1,F2,F3), from which we can also work out the barycentric
-!  coordinates of the vertices of the subtriangle.
-!
-    do f3 = 2, 3 * factor - 4, 3
-      do f2 = 2, 3 * factor - f3 - 2, 3
-        !update triangle centroid index
-        node_num = node_num + 1 
-        f1 = 3 * factor - f3 - f2
-
-        call sphere01_triangle_project ( a_xyz, b_xyz, c_xyz, f1, f2, f3, &
-          node_xyz )
-
-        call sphere01_triangle_project ( &
-          a_xyz, b_xyz, c_xyz, f1 - 2, f2 + 1, f3 + 1, a2_xyz )
-        call sphere01_triangle_project ( &
-          a_xyz, b_xyz, c_xyz, f1 + 1, f2 - 2, f3 + 1, b2_xyz )
-        call sphere01_triangle_project ( &
-          a_xyz, b_xyz, c_xyz, f1 + 1, f2 + 1, f3 - 2, c2_xyz )
-
-        call sphere01_triangle_vertices_to_area ( a2_xyz, b2_xyz, c2_xyz, ai )
-
-        !direction of the sphere triangle barycenter - direction i
-        mf0i=node_xyz
-         CALL deffil(lambdai,mfi,mf0i,f,ndi)
-
-  
-        IF((etac > zero).AND.(etac < one))THEN
-            lambdaif=etac*(r0/r0f)*(lambdai-one)+one
-            lambdaic=(lambdai*r0-lambdaif*r0f)/r0c
-        ELSE
-            lambdaif=lambdai
-            lambdaic=zero
-        END IF
-          
-        ru=ru0(node_num)
-        CALL contractile(fi,ffi,dwi,ddwi,ffic,ru,ru,lambdaic,lambdaif,  &
-            lambda0,l,r0,mu0,beta,b0,ffmax,fric,frac,dtime)
-        ru0(node_num)=ru
-      !       write(*,*) i1,     LAMBDAIF, ru
-        
-        CALL bangle(ang,f,mfi,noel,ndi)
-        
-        CALL density(rho,ang,bdisp,efi)
-        
-      !        AUX0=(FFIC/FFMAX)*(RHO)
-        aux0=ru*rho
-        
-        IF (ru > zero) THEN
-      !        AVERAGE CONTRACTION LEVEL
-          avga=avga+aux0
-          suma=suma+one
-          IF (aux0 > maxa) THEN
-      !        MAXIMUM CONTRACTION LEVEL
-            maxa = aux0
-            dirmax=mfi
-            im1=i1
-          END IF
-        END IF
-        
-        CALL sigfilfic(sfilfic,rho,lambdaif,dwi,mfi,ai,ndi)
-  
-        CALL csfilfic(cfilfic,rho,lambdaif,dwi,ddwi,mfi,ai,ndi)
-  
-  
-        IF(ru > zero)THEN
-          
-          DO j1=1,ndi
-            DO k1=1,ndi
-              sfic(j1,k1)=sfic(j1,k1)+aux*sfilfic(j1,k1)
-              DO l1=1,ndi
-                DO m1=1,ndi
-                  cfic(j1,k1,l1,m1)=cfic(j1,k1,l1,m1)+aux*cfilfic(j1,k1,l1,m1)
-                END DO
-              END DO
-            END DO
-          END DO
-          
-        END IF
-        
-        
-        !v=dwi
-        !node_num = node_num + 1  
-        !rr = rr + ai * v
-        !area_total = area_total + ai
-
-      end do
-    end do
-
-
-  IF (suma > zero) THEN
-    avga=avga/node_num
-  END IF
-  vara=(maxa-avga)/maxa
-  !        WRITE(*,*) VARA,MAXA,IM1,SUMA
-
-  end do
-!
-!  Discard allocated memory.
-!
-  deallocate ( edge_point )
-  deallocate ( face_order )
-  deallocate ( face_point )
-  deallocate ( point_coord )
-
-
-RETURN
-END SUBROUTINE affactnetfic_discrete
-SUBROUTINE affclnetfic_bazant(sfic,cfic,f,mf0,rw,filprops,affprops,  &
-        efi,noel,det,ndi)
-
-!>    AFFINE NETWORK: 'FICTICIOUS' CAUCHY STRESS AND ELASTICITY TENSOR
-!> BAZANT SPHERICAL INTEGRATION SCHEME
-use global
-IMPLICIT NONE
-
-INTEGER, INTENT(IN)                      :: ndi
-DOUBLE PRECISION, INTENT(OUT)            :: sfic(ndi,ndi)
-DOUBLE PRECISION, INTENT(OUT)            :: cfic(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION, INTENT(IN OUT)         :: f(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: mf0(nwp,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: rw(nwp)
-DOUBLE PRECISION, INTENT(IN)             :: filprops(8)
-DOUBLE PRECISION, INTENT(IN)             :: affprops(2)
-DOUBLE PRECISION, INTENT(IN OUT)         :: efi
-INTEGER, INTENT(IN OUT)                  :: noel
-DOUBLE PRECISION, INTENT(IN OUT)         :: det
-
-
-INTEGER :: i1,j1,k1,l1,m1, im1
-DOUBLE PRECISION :: sfilfic(ndi,ndi), cfilfic(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION :: mfi(ndi),mf0i(ndi)
-DOUBLE PRECISION :: aux,pi,lambdai,dwi,ddwi,rwi,lambdaic
-DOUBLE PRECISION :: l,r0f,r0,mu0,b0,beta,lambda0,rho,n,fi,ffi,dtime
-DOUBLE PRECISION :: r0c,etac,lambdaif
-DOUBLE PRECISION :: b,fric,ffmax,ang, frac(4),ru0(nwp),ru
-DOUBLE PRECISION :: vara,avga,maxa,aux0,ffic,suma,rho0,dirmax(ndi)
-DOUBLE PRECISION :: aa,rr
-INTEGER          :: nn,factor
-real ( kind = 8 ), external :: polyterm_value_3d
-!     FILAMENT
-l       = filprops(1)
-r0f     = filprops(2)
-r0c     = filprops(3)
-etac    = filprops(4)
-mu0     = filprops(5)
-beta    = filprops(6)
-b0      = filprops(7)
-lambda0 = filprops(8)
-!     NETWORK
-n       = affprops(1)
-b       = affprops(2)
-
-pi=four*ATAN(one)
-aux=n*(det**(-one))*four*pi
-cfic=zero
-sfic=zero
-
-rho=one
-r0=r0f+r0c
-
-aa = zero
-avga=zero
-maxa=zero
-suma=zero
-dirmax=zero
-!       CALL DENSITY(RHO0,ZERO,B,EFI)
-
-!             OPEN (UNIT=20,FILE="projfil.out",action="write",
-!     1 status="replace")
-
-!        LOOP OVER THE INTEGRATION DIRECTIONS (BAZANT INTEGRATION SCHEME)
-!bazant integration scheme
-DO i1=1,nwp
-  
-  mfi=zero
-  mf0i=zero
-  DO j1=1,ndi
-    mf0i(j1)=mf0(i1,j1)
-  END DO
-  rwi=rw(i1)
-  
-  CALL deffil(lambdai,mfi,mf0i,f,ndi)
-  
-  CALL bangle(ang,f,mfi,noel,ndi)
-  
-  CALL density(rho,ang,b,efi)
-  rho=one
-  
-  IF((etac > zero).AND.(etac < one))THEN
-    lambdaif=etac*(r0/r0f)*(lambdai-one)+one
-    lambdaic=(lambdai*r0-lambdaif*r0f)/r0c
-  ELSE
-    lambdaif=lambdai
-    lambdaic=zero
-  END IF
-  
-  CALL fil(fi,ffi,dwi,ddwi,lambdaif,lambda0,l,r0,mu0,beta,b0)
-  
-  CALL sigfilfic(sfilfic,rho,lambdaif,dwi,mfi,rwi,ndi)
-  
-  CALL csfilfic(cfilfic,rho,lambdaif,dwi,ddwi,mfi,rwi,ndi)
-  
-  
-  DO j1=1,ndi
-    DO k1=1,ndi
-      sfic(j1,k1)=sfic(j1,k1)+aux*sfilfic(j1,k1)
-      DO l1=1,ndi
-        DO m1=1,ndi
-          cfic(j1,k1,l1,m1)=cfic(j1,k1,l1,m1)+aux*cfilfic(j1,k1,l1,m1)
-        END DO
-      END DO
-    END DO
-  END DO
-  
-  !bazant integration scheme
- ! aa = aa +rwi*dwi
-END DO !end of discretization scheme
-
-!!discrete angular integration test
-!factor = 4
-!nn = 0
-!rr = zero
-!call sphere01_quad_icos1c ( factor, polyterm_value_3d, nn, rr )
-!write(*,*) 'bazant', four*pi*aa
-
-RETURN
-END SUBROUTINE affclnetfic_bazant
-SUBROUTINE affclnetfic_discrete(sfic,cfic,f,mf0,rw,filprops,affprops,  &
+SUBROUTINE affclnetfic_discrete(sfic,cfic,f,filprops,affprops,  &
         efi,noel,det,factor,ndi)
 
 !>    AFFINE NETWORK: 'FICTICIOUS' CAUCHY STRESS AND ELASTICITY TENSOR
@@ -1035,8 +440,6 @@ INTEGER, INTENT(IN)                      :: ndi
 DOUBLE PRECISION, INTENT(OUT)            :: sfic(ndi,ndi)
 DOUBLE PRECISION, INTENT(OUT)            :: cfic(ndi,ndi,ndi,ndi)
 DOUBLE PRECISION, INTENT(IN OUT)         :: f(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: mf0(nwp,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: rw(nwp)
 DOUBLE PRECISION, INTENT(IN)             :: filprops(8)
 DOUBLE PRECISION, INTENT(IN)             :: affprops(2)
 DOUBLE PRECISION, INTENT(IN OUT)         :: efi
@@ -1049,7 +452,7 @@ DOUBLE PRECISION :: mfi(ndi),mf0i(ndi)
 DOUBLE PRECISION :: aux,lambdai,dwi,ddwi,rwi,lambdaic
 DOUBLE PRECISION :: l,r0f,r0,mu0,b0,beta,lambda0,rho,n,fi,ffi,dtime
 DOUBLE PRECISION :: r0c,etac,lambdaif
-DOUBLE PRECISION :: bdisp,fric,ffmax,ang, frac(4),ru0(nwp),ru
+DOUBLE PRECISION :: bdisp,fric,ffmax,ang, frac(4),ru
 DOUBLE PRECISION :: vara,avga,maxa,aux0,ffic,suma,rho0,dirmax(ndi)
 
 ! INTEGRATION SCHEME
@@ -1289,345 +692,6 @@ bdisp   = affprops(2)
 
 RETURN
 END SUBROUTINE affclnetfic_discrete
-SUBROUTINE affmatclnetfic(pkfic,cfic,f,mf0,rw,filprops,affprops,  &
-        efi,noel,det,ndi)
-
-
-
-!>    AFFINE NETWORK: 'FICTICIOUS' PK STRESS AND ELASTICITY TENSOR
-use global
-IMPLICIT NONE
-
-INTEGER, INTENT(IN)                      :: ndi
-DOUBLE PRECISION, INTENT(OUT)            :: pkfic(ndi,ndi)
-DOUBLE PRECISION, INTENT(OUT)            :: cfic(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION, INTENT(IN OUT)         :: f(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: mf0(nwp,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: rw(nwp)
-DOUBLE PRECISION, INTENT(IN)             :: filprops(8)
-DOUBLE PRECISION, INTENT(IN)             :: affprops(2)
-DOUBLE PRECISION, INTENT(IN OUT)         :: efi
-INTEGER, INTENT(IN OUT)                  :: noel
-DOUBLE PRECISION, INTENT(IN OUT)         :: det
-
-
-
-INTEGER :: i1,j1,k1,l1,m1
-DOUBLE PRECISION :: sfilfic(ndi,ndi),   &
-     cfilfic(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION :: mfi(ndi),mf0i(ndi)
-DOUBLE PRECISION :: aux,pi,lambdai,dwi,ddwi,rwi,fi,ffi,r0
-DOUBLE PRECISION :: r0c,etac,lambdaif,lambdaic
-DOUBLE PRECISION :: l,r0f,mu0,b0,beta,lambda0,m,rho
-DOUBLE PRECISION :: b,fric,ffmax,ang
-
-!     FILAMENT
-l       = filprops(1)
-r0f     = filprops(2)
-r0c     = filprops(3)
-etac    = filprops(4)
-mu0     = filprops(5)
-beta    = filprops(6)
-b0      = filprops(7)
-lambda0 = filprops(8)
-!     NETWORK
-m       = affprops(1)
-b       = affprops(2)
-
-pi=four*ATAN(one)
-aux=m*(det**(-one))*four*pi
-cfic=zero
-pkfic=zero
-r0=r0f+r0c
-
-rho=one
-
-!        LOOP OVER THE INTEGRATION DIRECTIONS
-DO i1=1,nwp
-  
-  mfi=zero
-  mf0i=zero
-  DO j1=1,ndi
-    mf0i(j1)=mf0(i1,j1)
-  END DO
-  rwi=rw(i1)
-  
-  CALL deffil(lambdai,mfi,mf0i,f,ndi)
-  
-!       CALL FIL(FI,FFI,DWI,DDWI,LAMBDAI,LAMBDA0,L,R0,MU0,BETA,B0)
-  
-  CALL bangle(ang,f,mfi,noel,ndi)
-  
-  CALL density(rho,ang,b,efi)
-  rho = one
-  
-  IF((etac > zero).AND.(etac < one))THEN
-    
-    lambdaif=etac*(r0/r0f)*(lambdai-one)+one
-    lambdaic=(lambdai*r0-lambdaif*r0f)/r0c
-  ELSE
-    lambdaif=lambdai
-    lambdaic=zero
-  END IF
-  
-  CALL fil(fi,ffi,dwi,ddwi,lambdaif,lambda0,l,r0,mu0,beta,b0)
-  
-  CALL sigfilfic(sfilfic,rho,lambdai,dwi,mf0i,rwi,ndi)
-  
-  CALL csfilfic(cfilfic,rho,lambdai,dwi,ddwi,mf0i,rwi,ndi)
-  
-  DO j1=1,ndi
-    DO k1=1,ndi
-      pkfic(j1,k1)=pkfic(j1,k1)+aux*sfilfic(j1,k1)
-      DO l1=1,ndi
-        DO m1=1,ndi
-          cfic(j1,k1,l1,m1)=cfic(j1,k1,l1,m1)+aux*cfilfic(j1,k1,l1,m1)
-        END DO
-      END DO
-    END DO
-  END DO
-  
-END DO
-
-RETURN
-END SUBROUTINE affmatclnetfic
-SUBROUTINE affmatnetfic(pkfic,cmfic,f,mf0,rw,filprops,affprops,  &
-        ru0,dtime,frac,efi,noel,det,ndi)
-
-
-
-!>    AFFINE NETWORK: 'FICTICIOUS' PK STRESS AND ELASTICITY TENSOR
-use global
-IMPLICIT NONE
-
-INTEGER, INTENT(IN)                      :: ndi
-DOUBLE PRECISION, INTENT(OUT)            :: pkfic(ndi,ndi)
-DOUBLE PRECISION, INTENT(OUT)            :: cmfic(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION, INTENT(IN OUT)         :: f(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: mf0(nwp,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: rw(nwp)
-DOUBLE PRECISION, INTENT(IN)             :: filprops(6)
-DOUBLE PRECISION, INTENT(IN)             :: affprops(4)
-DOUBLE PRECISION, INTENT(IN OUT)         :: ru0
-DOUBLE PRECISION, INTENT(IN OUT)         :: dtime
-DOUBLE PRECISION, INTENT(IN OUT)         :: frac(4)
-DOUBLE PRECISION, INTENT(IN OUT)         :: efi
-INTEGER, INTENT(IN OUT)                  :: noel
-DOUBLE PRECISION, INTENT(IN OUT)         :: det
-
-
-
-INTEGER :: i1,j1,k1,l1,m1
-DOUBLE PRECISION :: sfilfic(ndi,ndi),   &
-     cfilfic(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION :: mfi(ndi),mf0i(ndi)
-DOUBLE PRECISION :: aux,pi,lambdai,dwi,ddwi,rwi,fi,ffi
-DOUBLE PRECISION :: l,r0,mu0,b0,beta,lambda0,m,rho
-DOUBLE PRECISION :: b,fric,ffmax,ang
-
-!     FILAMENT
-l       = filprops(1)
-r0      = filprops(2)
-mu0     = filprops(3)
-beta    = filprops(4)
-b0      = filprops(5)
-lambda0 = filprops(6)
-!     NETWORK
-m       = affprops(1)
-b       = affprops(2)
-fric    = affprops(3)
-ffmax   = affprops(4)
-
-pi=four*ATAN(one)
-aux=m*(det**(-one))*four*pi
-cmfic=zero
-pkfic=zero
-
-rho=one
-
-!        LOOP OVER THE INTEGRATION DIRECTIONS
-DO i1=1,nwp
-  
-  mfi=zero
-  mf0i=zero
-  DO j1=1,ndi
-    mf0i(j1)=mf0(i1,j1)
-  END DO
-  rwi=rw(i1)
-  
-  CALL deffil(lambdai,mfi,mf0i,f,ndi)
-  
-  CALL fil(fi,ffi,dwi,ddwi,lambdai,lambda0,l,r0,mu0,beta,b0)
-  
-  CALL bangle(ang,f,mfi,noel,ndi)
-  
-  CALL density(rho,ang,b,efi)
-  
-  CALL sigfilfic(sfilfic,rho,lambdai,dwi,mf0i,rwi,ndi)
-  
-  CALL csfilfic(cfilfic,rho,lambdai,dwi,ddwi,mf0i,rwi,ndi)
-  
-  DO j1=1,ndi
-    DO k1=1,ndi
-      pkfic(j1,k1)=pkfic(j1,k1)+aux*sfilfic(j1,k1)
-      DO l1=1,ndi
-        DO m1=1,ndi
-          cmfic(j1,k1,l1,m1)=cmfic(j1,k1,l1,m1)+aux*cfilfic(j1,k1,l1,m1)
-        END DO
-      END DO
-    END DO
-  END DO
-  
-END DO
-
-RETURN
-END SUBROUTINE affmatnetfic
-SUBROUTINE affnetfic(sfic,cfic,f,mf0,rw,filprops,affprops,ru0,  &
-        dtime,frac,efi,noel,vara,dirmax,det,ndi)
-
-
-
-!>    AFFINE NETWORK: 'FICTICIOUS' CAUCHY STRESS AND ELASTICITY TENSOR
-use global
-IMPLICIT NONE
-
-INTEGER, INTENT(IN)                      :: ndi
-DOUBLE PRECISION, INTENT(OUT)            :: sfic(ndi,ndi)
-DOUBLE PRECISION, INTENT(OUT)            :: cfic(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION, INTENT(IN OUT)         :: f(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: mf0(nwp,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: rw(nwp)
-DOUBLE PRECISION, INTENT(IN)             :: filprops(8)
-DOUBLE PRECISION, INTENT(IN)             :: affprops(5)
-DOUBLE PRECISION, INTENT(IN OUT)         :: ru0(nwp)
-DOUBLE PRECISION, INTENT(IN OUT)         :: dtime
-DOUBLE PRECISION, INTENT(IN OUT)         :: frac(4)
-DOUBLE PRECISION, INTENT(IN OUT)         :: efi
-INTEGER, INTENT(IN OUT)                  :: noel
-DOUBLE PRECISION, INTENT(OUT)            :: vara
-DOUBLE PRECISION, INTENT(OUT)            :: dirmax(ndi)
-DOUBLE PRECISION, INTENT(IN OUT)         :: det
-
-
-
-INTEGER :: i1,j1,k1,l1,m1, im1
-DOUBLE PRECISION :: sfilfic(ndi,ndi),   &
-     cfilfic(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION :: mfi(ndi),mf0i(ndi)
-DOUBLE PRECISION :: aux,pi,lambdai,dwi,ddwi,rwi,lambdaic
-DOUBLE PRECISION :: l,r0,mu0,b0,beta,lambda0,rho,m,fi,ffi
-DOUBLE PRECISION :: r0f,r0c,etac,lambdaif,lambdaicl
-DOUBLE PRECISION :: b,fric,ffmax,ang, ru
-DOUBLE PRECISION :: avga,maxa,aux0,ffic,suma,rho0
-
-!     FILAMENT
-l       = filprops(1)
-r0f     = filprops(2)
-r0c     = filprops(3)
-etac    = filprops(4)
-mu0     = filprops(5)
-beta    = filprops(6)
-b0      = filprops(7)
-lambda0 = filprops(8)
-!     NETWORK
-m       = affprops(2)
-b       = affprops(3)
-fric    = affprops(4)
-ffmax   = affprops(5)
-
-pi=four*ATAN(one)
-aux=m*(det**(-one))*four*pi
-cfic=zero
-sfic=zero
-
-rho=one
-r0=r0f+r0c
-
-avga=zero
-maxa=zero
-suma=zero
-dirmax=zero
-!       CALL DENSITY(RHO0,ZERO,B,EFI)
-
-!             OPEN (UNIT=20,FILE="projfil.out",action="write",
-!     1 status="replace")
-
-!        LOOP OVER THE INTEGRATION DIRECTIONS
-DO i1=1,nwp
-  
-  mfi=zero
-  mf0i=zero
-  DO j1=1,ndi
-    mf0i(j1)=mf0(i1,j1)
-  END DO
-  rwi=rw(i1)
-  
-  CALL deffil(lambdai,mfi,mf0i,f,ndi)
-  
-  IF((etac > zero).AND.(etac < one))THEN
-    
-    lambdaif=etac*(r0/r0f)*(lambdai-one)+one
-    lambdaicl=(lambdai*r0-lambdaif*r0f)/r0c
-  ELSE
-    lambdaif=lambdai
-    lambdaicl=zero
-  END IF
-  
-  ru=ru0(i1)
-  CALL contractile(fi,ffi,dwi,ddwi,ffic,ru,ru,lambdaic,lambdaif,  &
-      lambda0,l,r0,mu0,beta,b0,ffmax,fric,frac,dtime)
-  ru0(i1)=ru
-  
-  CALL bangle(ang,f,mfi,noel,ndi)
-  
-  CALL density(rho,ang,b,efi)
-  
-!        AUX0=(FFIC/FFMAX)*(RHO)
-  aux0=ru*rho
-  
-  IF (ru > zero) THEN
-!        AVERAGE CONTRACTION LEVEL
-    avga=avga+aux0
-    suma=suma+one
-    IF (aux0 > maxa) THEN
-!        MAXIMUM CONTRACTION LEVEL
-      maxa = aux0
-      dirmax=mfi
-      im1=i1
-    END IF
-  END IF
-  
-  CALL sigfilfic(sfilfic,rho,lambdaif,dwi,mfi,rwi,ndi)
-  
-  CALL csfilfic(cfilfic,rho,lambdaif,dwi,ddwi,mfi,rwi,ndi)
-  
-  
-  IF(ru > zero)THEN
-    
-    DO j1=1,ndi
-      DO k1=1,ndi
-        sfic(j1,k1)=sfic(j1,k1)+aux*sfilfic(j1,k1)
-        DO l1=1,ndi
-          DO m1=1,ndi
-            cfic(j1,k1,l1,m1)=cfic(j1,k1,l1,m1)+aux*cfilfic(j1,k1,l1,m1)
-          END DO
-        END DO
-      END DO
-    END DO
-    
-  END IF
-  
-END DO
-!      close(20)
-
-IF (suma > zero) THEN
-  avga=avga/nwp
-END IF
-vara=(maxa-avga)*((maxa)**(-one))
-!        WRITE(*,*) VARA,MAXA,IM1,SUMA
-
-RETURN
-END SUBROUTINE affnetfic
 SUBROUTINE affnetfic_discrete(sfic,cfic,f,filprops,affprops,  &
         efi,noel,det,factor,ndi)
 
@@ -1646,14 +710,13 @@ DOUBLE PRECISION, INTENT(IN OUT)         :: efi
 INTEGER, INTENT(IN OUT)                  :: noel
 DOUBLE PRECISION, INTENT(IN OUT)         :: det
 
-INTEGER :: i1,j1,k1,l1,m1, im1
+INTEGER :: i1,j1,k1,l1,m1
 DOUBLE PRECISION :: sfilfic(ndi,ndi), cfilfic(ndi,ndi,ndi,ndi)
 DOUBLE PRECISION :: mfi(ndi),mf0i(ndi)
-DOUBLE PRECISION :: aux,lambdai,dwi,ddwi,rwi,lambdaic
-DOUBLE PRECISION :: l,r0f,r0,mu0,b0,beta,lambda0,rho,n,fi,ffi,dtime
-DOUBLE PRECISION :: r0c,etac,lambdaif
-DOUBLE PRECISION :: bdisp,fric,ffmax,ang, frac(4),ru0(nwp),ru
-DOUBLE PRECISION :: vara,avga,maxa,aux0,ffic,suma,rho0,dirmax(ndi)
+DOUBLE PRECISION :: aux,lambdai,dwi,ddwi
+DOUBLE PRECISION :: l,r0,mu0,b0,beta,lambda0,rho,n,fi,ffi
+DOUBLE PRECISION :: bdisp,ang, frac(4)
+DOUBLE PRECISION :: avga,maxa,suma,dirmax(ndi)
 
 ! INTEGRATION SCHEME
   integer ( kind = 4 ) node_num
@@ -2065,59 +1128,6 @@ END DO
 
 RETURN
 END SUBROUTINE cmatisomatfic
-SUBROUTINE contractile(fc,ffc,dw,ddw,ffcc,ru,ru0,lambdac,lambdap,  &
-        lambda0,l,r0,mu0,beta,b0,ffcmax,fric,frac,dtime)
-
-
-use global
-IMPLICIT NONE
-
-
-DOUBLE PRECISION, INTENT(IN OUT)         :: fc
-DOUBLE PRECISION, INTENT(IN OUT)         :: ffc
-DOUBLE PRECISION, INTENT(IN OUT)         :: dw
-DOUBLE PRECISION, INTENT(IN OUT)         :: ddw
-DOUBLE PRECISION, INTENT(IN OUT)         :: ffcc
-DOUBLE PRECISION, INTENT(IN OUT)         :: ru
-DOUBLE PRECISION, INTENT(IN OUT)             :: ru0
-DOUBLE PRECISION, INTENT(OUT)            :: lambdac
-DOUBLE PRECISION, INTENT(IN OUT)             :: lambdap
-DOUBLE PRECISION, INTENT(IN OUT)         :: lambda0
-DOUBLE PRECISION, INTENT(IN OUT)         :: l
-DOUBLE PRECISION, INTENT(IN OUT)         :: r0
-DOUBLE PRECISION, INTENT(IN OUT)         :: mu0
-DOUBLE PRECISION, INTENT(IN OUT)         :: beta
-DOUBLE PRECISION, INTENT(IN OUT)         :: b0
-DOUBLE PRECISION, INTENT(IN OUT)         :: ffcmax
-DOUBLE PRECISION, INTENT(IN OUT)         :: fric
-DOUBLE PRECISION, INTENT(IN OUT)         :: frac(nch)
-DOUBLE PRECISION, INTENT(IN OUT)         :: dtime
-
-
-
-
-
-!      CHECK STRETCH
-IF (ru0 > zero) THEN
-  lambdac=lambdap+ru0
-ELSE
-  lambdac=lambdap
-END IF
-!        IF(LAMBDAC.LT.LAMBDAP)THEN
-!          LAMBDAC=LAMBDAP
-!           RU=ZERO
-!        ENDIF
-!        FORCE WITH CONTRACTION
-CALL fil(fc,ffc,dw,ddw,lambdac,lambda0,l,r0,mu0,beta,b0)
-!        PASSIVE FORCE
-!          CALL FIL(FC,FFC,DW,DDW,LAMBDAP,LAMBDA0,L,R0,MU0,BETA,B0)
-!        RELATIVE SLIDING
-CALL sliding(ffcc,ru,ffc,ru0,ffcmax,fric,frac,dtime)
-
-RETURN
-
-END SUBROUTINE contractile
-
 SUBROUTINE contraction24(s,LT,rt,ndi)
 
 
@@ -2748,9 +1758,7 @@ use global
 IMPLICIT NONE
 
 !      DOUBLE PRECISION TIME(2),KSTEP
-INTEGER :: i1,pos,pos1,pos2,pos3,vv
-
-
+INTEGER :: pos1
 DOUBLE PRECISION, INTENT(OUT)            :: statev(nsdv)
 
 
@@ -2957,292 +1965,6 @@ a_inv(3,3) = det_a_inv*(a(1,1)*a(2,2)-a(2,1)*a(1,2))
 
 RETURN
 END SUBROUTINE matinv3d
-SUBROUTINE naffmatnetfic(pkfic,cmfic,f,mf0,rw,filprops,naffprops,  &
-        det,ndi)
-
-!>    NON-AFFINE NETWORK:'FICTICIOUS' PK2 STRESS AND ELASTICITY TNSR
-use global
-IMPLICIT NONE
-
-INTEGER, INTENT(IN)                      :: ndi
-DOUBLE PRECISION, INTENT(OUT)            :: pkfic(ndi,ndi)
-DOUBLE PRECISION, INTENT(OUT)            :: cmfic(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION, INTENT(IN OUT)         :: f(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: mf0(nwp,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: rw(nwp)
-DOUBLE PRECISION, INTENT(IN)             :: filprops(6)
-DOUBLE PRECISION, INTENT(IN)             :: naffprops(2)
-DOUBLE PRECISION, INTENT(IN OUT)         :: det
-
-
-
-INTEGER :: i1,j1,k1,l1,m1
-DOUBLE PRECISION :: h(ndi,ndi),hh(ndi,ndi,ndi,ndi),  &
-    hi(ndi,ndi),hhi(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION :: mfi(ndi),mf0i(ndi)
-DOUBLE PRECISION :: aux,lambdai,dw,ddw,rwi,aux1,aux2,fi,ffi
-DOUBLE PRECISION :: l,r0,mu0,b0,beta,lambda,lambda0,n,pp
-
-!     FILAMENT
-l      = filprops(1)
-r0      = filprops(2)
-mu0     = filprops(3)
-beta    = filprops(4)
-b0      = filprops(5)
-lambda0 = filprops(6)
-!     NETWORK
-n       = naffprops(1)
-pp      = naffprops(2)
-
-lambda=zero
-h=zero
-hh=zero
-hi=zero
-hhi=zero
-aux=n*(det**(-one))
-
-DO i1=1,nwp
-  
-  mfi=zero
-  DO j1=1,ndi
-    mf0i(j1)=mf0(i1,j1)
-  END DO
-  rwi=rw(i1)
-  
-  CALL deffil(lambdai,mfi,mf0i,f,ndi)
-  lambda=lambda+(lambdai**pp)*rwi
-  
-  CALL hfilfic(hi,hhi,pp,lambdai,mf0i,rwi,ndi)
-  
-  DO j1=1,ndi
-    DO k1=1,ndi
-      h(j1,k1)=h(j1,k1)+hi(j1,k1)
-      DO l1=1,ndi
-        DO m1=1,ndi
-          hh(j1,k1,l1,m1)=hh(j1,k1,l1,m1)+hhi(j1,k1,l1,m1)
-        END DO
-      END DO
-    END DO
-  END DO
-  
-END DO
-
-lambda=lambda**(pp**(-one))
-
-CALL fil(fi,ffi,dw,ddw,lambda,lambda0,l,r0,mu0,beta,b0)
-
-pkfic=zero
-cmfic=zero
-aux1=aux*dw*lambda**(one-pp)
-aux2=aux*(ddw*(lambda**(two*(one-pp)))- (pp-one)*dw*(lambda**(one-two*pp)))
-
-DO j1=1,ndi
-  DO k1=1,ndi
-    pkfic(j1,k1)=aux1*h(j1,k1)
-    DO l1=1,ndi
-      DO m1=1,ndi
-        cmfic(j1,k1,l1,m1)=aux1*hh(j1,k1,l1,m1)+aux2*h(j1,k1)*h(l1,m1)
-      END DO
-    END DO
-  END DO
-END DO
-
-RETURN
-END SUBROUTINE naffmatnetfic
-SUBROUTINE naffnetfic(sfic,cfic,f,mf0,rw,filprops,naffprops,  &
-        det,ndi)
-
-use global
-implicit none
-!>    NON-AFFINE NETWORK:'FICTICIUOUS' CAUCHY STRESS AND ELASTICITY TNSR
-INTEGER :: i1,j1,k1,l1,m1
-DOUBLE PRECISION, INTENT(IN OUT)         :: det
-INTEGER, INTENT(IN)                      :: ndi
-DOUBLE PRECISION :: h(ndi,ndi),hh(ndi,ndi,ndi,ndi),  &
-    hi(ndi,ndi),hhi(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION :: mfi(ndi),mf0i(ndi)
-DOUBLE PRECISION :: aux,lambdai,dw,ddw,rwi,aux1,aux2,fi,ffi
-DOUBLE PRECISION :: l,r0,mu0,b0,beta,lambda,lambda0,n,pp,etac,r0c,r0f
-
-
-DOUBLE PRECISION, INTENT(OUT)            :: sfic(ndi,ndi)
-DOUBLE PRECISION, INTENT(OUT)            :: cfic(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION, INTENT(IN OUT)         :: f(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: mf0(nwp,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: rw(nwp)
-DOUBLE PRECISION, INTENT(IN)             :: filprops(8)
-DOUBLE PRECISION, INTENT(IN)             :: naffprops(2)
-
-
-
-
-
-!     FILAMENT
-l       = filprops(1)
-r0f     = filprops(2)
-r0c     = filprops(3)
-etac    = filprops(4)
-mu0     = filprops(5)
-beta    = filprops(6)
-b0      = filprops(7)
-lambda0 = filprops(8)
-!     NETWORK
-n       = naffprops(1)
-pp      = naffprops(2)
-
-lambda=zero
-h=zero
-hh=zero
-hi=zero
-hhi=zero
-aux=n*(det**(-one))
-r0 = r0f+r0c
-
-DO i1=1,nwp
-  
-  mfi=zero
-  DO j1=1,ndi
-    mf0i(j1)=mf0(i1,j1)
-  END DO
-  rwi=rw(i1)
-  
-  CALL deffil(lambdai,mfi,mf0i,f,ndi)
-  lambda=lambda+(lambdai**pp)*rwi
-  
-  CALL hfilfic(hi,hhi,pp,lambdai,mfi,rwi,ndi)
-  
-  DO j1=1,ndi
-    DO k1=1,ndi
-      h(j1,k1)=h(j1,k1)+hi(j1,k1)
-      DO l1=1,ndi
-        DO m1=1,ndi
-          hh(j1,k1,l1,m1)=hh(j1,k1,l1,m1)+hhi(j1,k1,l1,m1)
-        END DO
-      END DO
-    END DO
-  END DO
-  
-END DO
-
-lambda=lambda**(pp**(-one))
-
-CALL fil(fi,ffi,dw,ddw,lambda,lambda0,l,r0,mu0,beta,b0)
-
-cfic=zero
-sfic=zero
-aux1=aux*dw*lambda**(one-pp)
-aux2=aux*(ddw*(lambda**(two*(one-pp)))- (pp-one)*dw*(lambda**(one-two*pp)))
-
-DO j1=1,ndi
-  DO k1=1,ndi
-    sfic(j1,k1)=aux1*h(j1,k1)
-    DO l1=1,ndi
-      DO m1=1,ndi
-        cfic(j1,k1,l1,m1)=aux1*hh(j1,k1,l1,m1)+aux2*h(j1,k1)*h(l1,m1)
-      END DO
-    END DO
-  END DO
-END DO
-
-RETURN
-END SUBROUTINE naffnetfic
-SUBROUTINE naffnetfic_bazant(sfic,cfic,f,mf0,rw,filprops,naffprops,  &
-        det,ndi)
-!
-!>    NON-AFFINE NETWORK:'FICTICIUOUS' CAUCHY STRESS AND ELASTICITY TNSR
-use global
-IMPLICIT NONE
-
-INTEGER, INTENT(IN)                      :: ndi
-DOUBLE PRECISION, INTENT(OUT)            :: sfic(ndi,ndi)
-DOUBLE PRECISION, INTENT(OUT)            :: cfic(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION, INTENT(IN OUT)         :: f(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: mf0(nwp,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: rw(nwp)
-DOUBLE PRECISION, INTENT(IN)             :: filprops(8)
-DOUBLE PRECISION, INTENT(IN)             :: naffprops(2)
-DOUBLE PRECISION, INTENT(IN OUT)         :: det
-
-
-
-INTEGER :: i1,j1,k1,l1,m1
-DOUBLE PRECISION :: h(ndi,ndi),hh(ndi,ndi,ndi,ndi),  &
-    hi(ndi,ndi),hhi(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION :: mfi(ndi),mf0i(ndi)
-DOUBLE PRECISION :: aux,lambdai,dw,ddw,rwi,aux1,aux2,fi,ffi
-DOUBLE PRECISION :: l,r0,mu0,b0,beta,lambda,lambda0,n,pp
-DOUBLE PRECISION :: r0f,r0c,etac
-
-!     FILAMENT
-l       = filprops(1)
-r0f     = filprops(2)
-r0c     = filprops(3)
-etac    = filprops(4)
-mu0     = filprops(5)
-beta    = filprops(6)
-b0      = filprops(7)
-lambda0 = filprops(8)
-!     NETWORK
-n       = naffprops(1)
-pp      = naffprops(2)
-
-lambda=zero
-h=zero
-hh=zero
-hi=zero
-hhi=zero
-aux=n*(det**(-one))
-
-r0=r0f+r0c
-
-DO i1=1,nwp
-  
-  mfi=zero
-  DO j1=1,ndi
-    mf0i(j1)=mf0(i1,j1)
-  END DO
-  rwi=rw(i1)
-  
-  CALL deffil(lambdai,mfi,mf0i,f,ndi)
-  lambda=lambda+(lambdai**pp)*rwi
-  
-  CALL hfilfic(hi,hhi,pp,lambdai,mfi,rwi,ndi)
-  
-  DO j1=1,ndi
-    DO k1=1,ndi
-      h(j1,k1)=h(j1,k1)+hi(j1,k1)
-      DO l1=1,ndi
-        DO m1=1,ndi
-          hh(j1,k1,l1,m1)=hh(j1,k1,l1,m1)+hhi(j1,k1,l1,m1)
-        END DO
-      END DO
-    END DO
-  END DO
-  
-END DO
-
-lambda=lambda**(pp**(-one))
-
-CALL fil(fi,ffi,dw,ddw,lambda,lambda0,l,r0,mu0,beta,b0)
-
-cfic=zero
-sfic=zero
-aux1=aux*dw*lambda**(one-pp)
-aux2=aux*(ddw*(lambda**(two*(one-pp)))-(pp-one)*dw*(lambda**(one-two*pp)))
-
-DO j1=1,ndi
-  DO k1=1,ndi
-    sfic(j1,k1)=aux1*h(j1,k1)
-    DO l1=1,ndi
-      DO m1=1,ndi
-        cfic(j1,k1,l1,m1)=aux1*hh(j1,k1,l1,m1)+aux2*h(j1,k1)*h(l1,m1)
-      END DO
-    END DO
-  END DO
-END DO
-
-RETURN
-END SUBROUTINE naffnetfic_bazant
 SUBROUTINE naffnetfic_discrete(sfic,cfic,f,filprops,naffprops,  &
         det,factor,ndi)
 !
@@ -4165,63 +2887,31 @@ CALL matinv3d(u,uinv,ndi)
 r = matmul(f,uinv)
 RETURN
 END SUBROUTINE rotation
-SUBROUTINE sdvread(frac,ru0,statev)
+SUBROUTINE sdvread(statev)
 use global
 implicit none
 !>    VISCOUS DISSIPATION: READ STATE VARS
 DOUBLE PRECISION, INTENT(IN)             :: statev(nsdv)
 
 
-INTEGER :: vv,pos1,pos2,pos3,i1
 
-DOUBLE PRECISION, INTENT(OUT)            :: frac(4)
-DOUBLE PRECISION, INTENT(OUT)            :: ru0(nwp)
-
-
-
-pos1=0
-DO i1=1,4
-  pos2=pos1+i1
-  frac(i1)=statev(pos2)
-END DO
-
-DO i1=1,nwp
-  pos3=pos2+i1
-  ru0(i1)=statev(pos3)
-END DO
 
 RETURN
 
 END SUBROUTINE sdvread
-SUBROUTINE sdvwrite(frac,ru0,det,varact,dirmax,statev)
+SUBROUTINE sdvwrite(det,statev)
 !>    VISCOUS DISSIPATION: WRITE STATE VARS
 use global
 implicit none
 
-INTEGER :: vv,pos1,pos2,pos3,i1
+INTEGER :: pos1
 !
-DOUBLE PRECISION, INTENT(IN)             :: frac(4)
-DOUBLE PRECISION, INTENT(IN)             :: ru0(nwp)
 DOUBLE PRECISION, INTENT(IN)             :: det
-DOUBLE PRECISION, INTENT(IN)             :: varact
-DOUBLE PRECISION, INTENT(IN)             :: dirmax(3)
 DOUBLE PRECISION, INTENT(OUT)            :: statev(nsdv)
 !
 pos1=0
-DO i1=1,4
-  pos2=pos1+i1
-  statev(pos2)=frac(i1)
-END DO
+statev(pos1+1)=det
 
-DO i1=1,nwp
-  pos3=pos2+i1
-  statev(pos3)=ru0(i1)
-END DO
-statev(pos3+1)=det
-statev(pos3+2)=varact
-statev(pos3+3)=dirmax(1)
-statev(pos3+4)=dirmax(2)
-statev(pos3+5)=dirmax(3)
 RETURN
 
 END SUBROUTINE sdvwrite
@@ -4410,75 +3100,6 @@ CALL push2(sfic,pkfic,f,det,ndi)
 
 RETURN
 END SUBROUTINE sigisomatfic
-SUBROUTINE signetfic(sfic,f,mf0,rw,filprops,netprops,  &
-        rho,lambda0,n,det,ndi)
-
-
-
-!>    AFFINE NETWORK:  'FICTICIUOUS' CAUCHY STRESS
-use global
-IMPLICIT NONE
-
-INTEGER, INTENT(IN)                      :: ndi
-DOUBLE PRECISION, INTENT(OUT)            :: sfic(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN OUT)         :: f(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: mf0(nwp,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: rw(nwp)
-DOUBLE PRECISION, INTENT(IN)             :: filprops(5)
-DOUBLE PRECISION, INTENT(IN)             :: netprops(3)
-DOUBLE PRECISION, INTENT(OUT)            :: rho
-DOUBLE PRECISION, INTENT(OUT)            :: lambda0
-DOUBLE PRECISION, INTENT(OUT)            :: n
-DOUBLE PRECISION, INTENT(IN OUT)         :: det
-
-
-
-INTEGER :: i1,j1,k1
-DOUBLE PRECISION :: sfilfic(ndi,ndi)
-DOUBLE PRECISION :: mfi(ndi),mf0i(ndi)
-DOUBLE PRECISION :: aux,pi,lambdai,dwi,ddwi,rwi,fi,ffi
-DOUBLE PRECISION :: l,r0,mu0,b0,beta
-
-!     FILAMENT
-l      = filprops(1)
-r0      = filprops(2)
-mu0     = filprops(3)
-beta    = filprops(4)
-b0      = filprops(5)
-!     NETWORK
-n      = netprops(1)
-lambda0 = netprops(2)
-rho     = netprops(3)
-
-pi=four*ATAN(one)
-aux=n*(det**(-one))*four*pi
-sfic=zero
-
-DO i1=1,nwp
-  
-  mfi=zero
-  DO j1=1,ndi
-    mf0i(j1)=mf0(i1,j1)
-  END DO
-  rwi=rw(i1)
-  
-  
-  CALL deffil(lambdai,mfi,mf0i,f,ndi)
-  
-  CALL fil(fi,ffi,dwi,ddwi,lambdai,lambda0,l,r0,mu0,beta,b0)
-  
-  CALL sigfilfic(sfilfic,rho,lambdai,dwi,mfi,rwi,ndi)
-  
-  DO j1=1,ndi
-    DO k1=1,ndi
-      sfic(j1,k1)=sfic(j1,k1)+aux*sfilfic(j1,k1)
-    END DO
-  END DO
-  
-END DO
-
-RETURN
-END SUBROUTINE signetfic
 SUBROUTINE sigvol(svol,pv,unit2,ndi)
 
 
@@ -6115,14 +4736,10 @@ real(8), INTENT(IN OUT)                   :: dtime
 INTEGER, INTENT(IN OUT)                  :: kstep
 INTEGER, INTENT(IN OUT)                  :: kinc
 
-COMMON /kfil/mf0
-COMMON /kfilr/rw
 COMMON /kfilp/prefdir
-COMMON /kinit/init
 
 
-DOUBLE PRECISION :: sphere(nwp,5),mf0(nwp,3),rw(nwp),  &
-                    prefdir(nelem,4), init(2)
+DOUBLE PRECISION :: prefdir(nelem,4)     
 CHARACTER (LEN=256) ::  filename, jobdir
 INTEGER :: lenjobdir,i,j,k
 
@@ -6138,12 +4755,6 @@ IF(lop == 0.OR.lop == 4) THEN
     READ(16,*) (prefdir(i,j),j=1,4)
   END DO
   CLOSE(16)
-  !initial conditions
-  filename=jobdir(:lenjobdir)//'/'//dir3
-  OPEN(18,FILE=filename)
-  READ(18,*) (init(j),j=1,2)
-  CLOSE(18)
-  
 END IF
 
 RETURN

@@ -1,4 +1,4 @@
-SUBROUTINE affclnetfic_discrete(sfic,cfic,f,mf0,rw,filprops,affprops,  &
+SUBROUTINE affclnetfic_discrete(sfic,cfic,f,filprops,affprops,  &
         efi,noel,det,factor,ndi)
 
 !>    AFFINE NETWORK: 'FICTICIOUS' CAUCHY STRESS AND ELASTICITY TENSOR
@@ -10,8 +10,6 @@ INTEGER, INTENT(IN)                      :: ndi
 DOUBLE PRECISION, INTENT(OUT)            :: sfic(ndi,ndi)
 DOUBLE PRECISION, INTENT(OUT)            :: cfic(ndi,ndi,ndi,ndi)
 DOUBLE PRECISION, INTENT(IN OUT)         :: f(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: mf0(nwp,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: rw(nwp)
 DOUBLE PRECISION, INTENT(IN)             :: filprops(8)
 DOUBLE PRECISION, INTENT(IN)             :: affprops(2)
 DOUBLE PRECISION, INTENT(IN OUT)         :: efi
@@ -24,7 +22,7 @@ DOUBLE PRECISION :: mfi(ndi),mf0i(ndi)
 DOUBLE PRECISION :: aux,lambdai,dwi,ddwi,rwi,lambdaic
 DOUBLE PRECISION :: l,r0f,r0,mu0,b0,beta,lambda0,rho,n,fi,ffi,dtime
 DOUBLE PRECISION :: r0c,etac,lambdaif
-DOUBLE PRECISION :: bdisp,fric,ffmax,ang, frac(4),ru0(nwp),ru
+DOUBLE PRECISION :: bdisp,fric,ffmax,ang, frac(4),ru
 DOUBLE PRECISION :: vara,avga,maxa,aux0,ffic,suma,rho0,dirmax(ndi)
 
 ! INTEGRATION SCHEME
@@ -150,7 +148,7 @@ bdisp   = affprops(2)
         CALL bangle(ang,f,mfi,noel,ndi)
   
         CALL density(rho,ang,bdisp,efi)
-        rho=one
+
   
         IF((etac > zero).AND.(etac < one))THEN
             lambdaif=etac*(r0/r0f)*(lambdai-one)+one

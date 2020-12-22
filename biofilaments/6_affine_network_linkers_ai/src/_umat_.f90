@@ -3,70 +3,72 @@
 !>        Date        Programmer        Description of change        |
 !>        ====        ==========        =====================        |
 !>     05/11/2016    Joao Ferreira      full network model           |
-!>     05/11/2016    Joao Ferreira      nonaffine network            |
-!>     06/11/2016    Joao Ferreira      affine network               |
-!>     16/02/2018    Joao Ferreira      compliant cross-linkers      |
 !>--------------------------------------------------------------------
 !>     Description:
-!>     UMAT: USER MATERIAL FOR THE FULL NETWORK MODEL.
-!>                AFFINE AND NON-AFFINE DEFORMATIONS
-!>     UEXTERNALDB: READ FILAMENTS ORIENTATION AND PREFERED DIRECTION
+!C>     UMAT: USER MATERIAL FOR THE FULL NETWORK MODEL.
+!C>                 AFFINE DEFORMATIONS
+!C>     UEXTERNALDB: READ FILAMENTS ORIENTATION AND PREFERED DIRECTION
 !>--------------------------------------------------------------------
 !>---------------------------------------------------------------------
 
-SUBROUTINE umat(stress,statev,ddsdde,sse,spd,scd,rpl,ddsddt, drplde,drpldt,stran,     &
-dstran,time,dtime,temp,dtemp,predef,dpred,cmname,ndi,nshr,ntens,nstatev,props,  &
-nprops,coords,drot,pnewdt,celent,dfgrd0,dfgrd1,noel,npt,layer,kspt,kstep,kinc)
-
+SUBROUTINE umat(stress,statev,ddsdde,sse,spd,scd, rpl,ddsddt,drplde,drpldt,  &
+    stran,dstran,time,dtime,temp,dtemp,predef,dpred,cmname,  &
+    ndi,nshr,ntens,nstatev,props,nprops,coords,drot,pnewdt,  &
+    celent,dfgrd0,dfgrd1,noel,npt,layer,kspt,kstep,kinc)
+!
+use global  
+IMPLICIT NONE
 !----------------------------------------------------------------------
 !--------------------------- DECLARATIONS -----------------------------
 !----------------------------------------------------------------------
-use global
-IMPLICIT NONE
-
-
+INTEGER, INTENT(IN OUT)                  :: noel
+INTEGER, INTENT(IN OUT)                  :: npt
+INTEGER, INTENT(IN OUT)                  :: layer
+INTEGER, INTENT(IN OUT)                  :: kspt
+INTEGER, INTENT(IN OUT)                  :: kstep
+INTEGER, INTENT(IN OUT)                  :: kinc
 INTEGER, INTENT(IN OUT)                  :: ndi
 INTEGER, INTENT(IN OUT)                  :: nshr
 INTEGER, INTENT(IN OUT)                  :: ntens
 INTEGER, INTENT(IN OUT)                  :: nstatev
 INTEGER, INTENT(IN OUT)                  :: nprops
+DOUBLE PRECISION, INTENT(IN OUT)         :: sse
+DOUBLE PRECISION, INTENT(IN OUT)         :: spd
+DOUBLE PRECISION, INTENT(IN OUT)         :: scd
+DOUBLE PRECISION, INTENT(IN OUT)         :: rpl
+DOUBLE PRECISION, INTENT(IN OUT)         :: dtime
+DOUBLE PRECISION, INTENT(IN OUT)         :: drpldt
+DOUBLE PRECISION, INTENT(IN OUT)         :: temp
+DOUBLE PRECISION, INTENT(IN OUT)         :: dtemp
+CHARACTER (LEN=8), INTENT(IN OUT)        :: cmname
 DOUBLE PRECISION, INTENT(IN OUT)         :: pnewdt
-INTEGER, INTENT(IN OUT)                  :: noel
-INTEGER, INTENT(IN OUT)                  :: npt
-INTEGER, INTENT(IN OUT)                  :: kstep
-INTEGER, INTENT(IN OUT)                  :: kinc
+DOUBLE PRECISION, INTENT(IN OUT)         :: celent
+
+DOUBLE PRECISION, INTENT(IN OUT)         :: stress(ntens)
+DOUBLE PRECISION, INTENT(IN OUT)         :: statev(nstatev)
+DOUBLE PRECISION, INTENT(IN OUT)         :: ddsdde(ntens,ntens)
+DOUBLE PRECISION, INTENT(IN OUT)         :: ddsddt(ntens)
+DOUBLE PRECISION, INTENT(IN OUT)         :: drplde(ntens)
+DOUBLE PRECISION, INTENT(IN OUT)         :: stran(ntens)
+DOUBLE PRECISION, INTENT(IN OUT)         :: dstran(ntens)
+DOUBLE PRECISION, INTENT(IN OUT)         :: time(2)
+DOUBLE PRECISION, INTENT(IN OUT)         :: predef(1)
+DOUBLE PRECISION, INTENT(IN OUT)         :: dpred(1)
 DOUBLE PRECISION, INTENT(IN)             :: props(nprops)
 DOUBLE PRECISION, INTENT(IN OUT)         :: coords(3)
-DOUBLE PRECISION, INTENT(OUT)            :: sigma(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN OUT)         :: statev(nstatev)
-DOUBLE PRECISION, INTENT(OUT)            :: ddsigdde(ndi,ndi,ndi,ndi)
+DOUBLE PRECISION, INTENT(IN OUT)         :: drot(3,3)
 DOUBLE PRECISION, INTENT(IN OUT)         :: dfgrd0(3,3)
 DOUBLE PRECISION, INTENT(IN OUT)         :: dfgrd1(3,3)
-DOUBLE PRECISION, INTENT(IN OUT)         :: time(2)
-DOUBLE PRECISION, INTENT(IN OUT)         :: dtime
-DOUBLE PRECISION, INTENT(IN OUT)         :: predef(1)
-!     FILAMENTS DIRECTION
-COMMON /kfil/mf0
-!     FILAMENTS WEIGHT
-COMMON /kfilr/rw
-!     PREFERED DIRETION
-COMMON /kfilp/prefdir
+
 !
-CHARACTER (LEN=8) :: cmname
-INTEGER :: layer, kspt
-DOUBLE PRECISION :: stress(ntens),  &
-    ddsdde(ntens,ntens),ddsddt(ntens),drplde(ntens),  &
-    stran(ntens),dstran(ntens), dpred(1),  drot(3,3)
-!
-DOUBLE PRECISION :: sse, spd, scd, rpl, drpldt, temp, dtemp, celent
 !     FLAGS
 !      INTEGER FLAG1
 !     UTILITY TENSORS
 DOUBLE PRECISION :: unit2(ndi,ndi),unit4(ndi,ndi,ndi,ndi),  &
     unit4s(ndi,ndi,ndi,ndi), proje(ndi,ndi,ndi,ndi),projl(ndi,ndi,ndi,ndi)
 !     KINEMATICS
-DOUBLE PRECISION :: distgr(ndi,ndi),distgr0(ndi,ndi),  &
-    c(ndi,ndi),b(ndi,ndi), cbar(ndi,ndi),bbar(ndi,ndi),distgrinv(ndi,ndi),  &
+DOUBLE PRECISION :: distgr(ndi,ndi),c(ndi,ndi),b(ndi,ndi),  &
+    cbar(ndi,ndi),bbar(ndi,ndi),distgrinv(ndi,ndi),  &
     ubar(ndi,ndi),vbar(ndi,ndi),rot(ndi,ndi), dfgrd1inv(ndi,ndi)
 DOUBLE PRECISION :: det,cbari1,cbari2
 !     VOLUMETRIC CONTRIBUTION
@@ -82,32 +84,26 @@ DOUBLE PRECISION :: c10,c01,sseiso,diso(5),pkmatfic(ndi,ndi),  &
     smatfic(ndi,ndi),sisomatfic(ndi,ndi), cmisomatfic(ndi,ndi,ndi,ndi),  &
     cisomatfic(ndi,ndi,ndi,ndi)
 !     FILAMENTS NETWORK CONTRIBUTION
-DOUBLE PRECISION :: mf0(nwp,3),rw(nwp),filprops(8), naffprops(2),affprops(2)
-DOUBLE PRECISION :: ll,r0,lambda0,mu0,beta,nn,mm,b0,bb,phi,p
-DOUBLE PRECISION :: nna,r0f,r0c,etac
+DOUBLE PRECISION :: filprops(8), affprops(2)
+DOUBLE PRECISION :: ll,lambda0,mu0,beta,nn,b0,bb
+DOUBLE PRECISION :: phi,r0,r0c,r0f,p,etac
 DOUBLE PRECISION :: pknetfic(ndi,ndi),cmnetfic(ndi,ndi,ndi,ndi)
 DOUBLE PRECISION :: snetfic(ndi,ndi),cnetfic(ndi,ndi,ndi,ndi)
 DOUBLE PRECISION :: pknetficaf(ndi,ndi),pknetficnaf(ndi,ndi)
-DOUBLE PRECISION :: snetficaf(ndi,ndi),snetficnaf(ndi,ndi),  &
-    snetficafp(ndi,ndi)
+DOUBLE PRECISION :: snetficaf(ndi,ndi),snetficnaf(ndi,ndi)
 DOUBLE PRECISION :: cmnetficaf(ndi,ndi,ndi,ndi), cmnetficnaf(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION :: cnetficaf(ndi,ndi,ndi,ndi),  &
-    cnetficafp(ndi,ndi,ndi,ndi), cnetficnaf(ndi,ndi,ndi,ndi)
+DOUBLE PRECISION :: cnetficaf(ndi,ndi,ndi,ndi), cnetficnaf(ndi,ndi,ndi,ndi)
 DOUBLE PRECISION :: efi
-INTEGER :: nterm,stat
+INTEGER :: nterm,factor
 !     CONTRACTILE FILAMENT
-DOUBLE PRECISION :: fric,ffmax,frac0(nch),frac(nch),kch(7),ru0(nwp),  &
-    prefdir(nelem,4),varact,sactiso(ndi,ndi),  &
-    sactvl(ndi),sactvc(ndi,ndi),dirmax(ndi)
-!     VISCOUS PROPERTIES (GENERALIZED MAXWEL DASHPOTS)
-DOUBLE PRECISION :: vscprops(6)
-INTEGER :: vv
+DOUBLE PRECISION :: frac0(4),frac(4),kch(7), prefdir(nelem,4)
+
 !     JAUMMAN RATE CONTRIBUTION (REQUIRED FOR ABAQUS UMAT)
-!      DOUBLE PRECISION CJR(NDI,NDI,NDI,NDI)
+DOUBLE PRECISION :: cjr(ndi,ndi,ndi,ndi)
 !     CAUCHY STRESS AND ELASTICITY TENSOR
-DOUBLE PRECISION :: ddpkdde(ndi,ndi,ndi,ndi)
+DOUBLE PRECISION :: sigma(ndi,ndi),ddsigdde(ndi,ndi,ndi,ndi),  &
+    ddpkdde(ndi,ndi,ndi,ndi)
 DOUBLE PRECISION :: stest(ndi,ndi), ctest(ndi,ndi,ndi,ndi)
-INTEGER :: i1,j1, factor
 !----------------------------------------------------------------------
 !-------------------------- INITIALIZATIONS ---------------------------
 !----------------------------------------------------------------------
@@ -118,6 +114,7 @@ unit4s=zero
 proje=zero
 projl=zero
 !     KINEMATICS
+distgr=zero
 c=zero
 b=zero
 cbar=zero
@@ -125,6 +122,7 @@ bbar=zero
 ubar=zero
 vbar=zero
 rot=zero
+det=zero
 cbari1=zero
 cbari2=zero
 !     VOLUMETRIC
@@ -160,32 +158,17 @@ pknetfic=zero
 pknetficaf=zero
 pknetficnaf=zero
 snetficaf=zero
-snetficafp=zero
 snetficnaf=zero
 cmnetfic=zero
 cmnetficaf=zero
 cmnetficnaf=zero
 cnetficaf=zero
 cnetficnaf=zero
-cnetficafp=zero
-!     DIFFUSION
-dpdt=zero
-dphidmu=zero
-dphidotdmu=zero
-mob=zero
-dmdmu=zero
-dmdj=zero
-dduddc=one
-ddcddu=one
-dete=one
-dets=one
 !     JAUMANN RATE
-!      CJR=ZERO
+cjr=zero
 !     TOTAL CAUCHY STRESS AND ELASTICITY TENSORS
 sigma=zero
 ddsigdde=zero
-
-ru0=zero
 !----------------------------------------------------------------------
 !------------------------ IDENTITY TENSORS ----------------------------
 !----------------------------------------------------------------------
@@ -211,31 +194,26 @@ lambda0  = props(12)
 filprops = props(5:12)
 !     NONAFFINE NETWORK
 nn       = props(13)
-p        = props(14)
-naffprops= props(13:14)
-!     AFFINE NETWORK
-nna      = props(15)
-bb       = props(16)
-affprops = props(15:16)
+bb        = props(14)
+affprops= props(13:14)
+
 
 !     NUMERICAL COMPUTATIONS
 nterm    = 60
+factor = 6
 
-!        STATE VARIABLES: INITIALIZATION/FROM LAST INCREMENT
-IF ((kinc <= 1).AND.(kstep == 1)) THEN
-  CALL initialize(statev,phi0)  
+!        STATE VARIABLES AND CHEMICAL PARAMETERS
+IF ((time(1) == zero).AND.(kstep == 1)) THEN
+  CALL initialize(statev)
 END IF
 !        READ STATEV
-CALL sdvread(statev,phit,cr)
-!if (npt==1) then
-!write(*,*) kinc,statev
-!endif
+CALL sdvread(statev)
 !----------------------------------------------------------------------
 !---------------------------- KINEMATICS ------------------------------
 !----------------------------------------------------------------------
 !     DISTORTION GRADIENT
 CALL fslip(dfgrd1,distgr,det,ndi)
-!     INVERSE OF DEFORMATION GRADIENT
+!     INVERSE OF DISTORTION GRADIENT
 CALL matinv3d(dfgrd1,dfgrd1inv,ndi)
 !     INVERSE OF DISTORTION GRADIENT
 CALL matinv3d(distgr,distgrinv,ndi)
@@ -244,97 +222,59 @@ CALL deformation(dfgrd1,c,b,ndi)
 CALL deformation(distgr,cbar,bbar,ndi)
 !     INVARIANTS OF DEVIATORIC DEFORMATION TENSORS
 CALL invariants(cbar,cbari1,cbari2,ndi)
-
 !     STRETCH TENSORS
 CALL stretch(cbar,bbar,ubar,vbar,ndi)
-!     ROTATION TENSOR
+!     ROTATION TENSORS
 CALL rotation(distgr,rot,ubar,ndi)
 !----------------------------------------------------------------------
 !--------------------- CONSTITUTIVE RELATIONS  ------------------------
 !----------------------------------------------------------------------
 !     DEVIATORIC PROJECTION TENSORS
 CALL projeul(unit2,unit4s,proje,ndi)
+
 CALL projlag(c,unit4,projl,ndi)
 
-!---- CHEMICAL POTENTIAL ---------------------------------------------
-!---- CHEMICAL INTERACTION ---------------------------------------------
-      PHIT=ONE
-     call chempot(phit,phitau,dpdt,dphidmu,dphidotdmu,mob,dmdmu,dmdj, &
-                   dduddc,ddcddu,vmol,mutau,theta0,   &
-                    dete,dets,det,cr,k,dffprops,unit2,dtime,ndi)
-      PHITAU=PHIT
-!     TIME DERIVATIVE OF THE FRACTION CONCENTRATION (FINITE DIF)
-      DPDT= (PHITAU - PHIT)/DTIME
-!     DERIVATIVE OF CONCENTRATION WRT CHEMICAL POTENTIAL
-      DPHIDMU=ZERO
-!     DERIVATIVE OF CONCENTRATION WRT CHEMICAL POTENTIAL
-      DPHIDMU=ZERO
-      DDUDDC=zero
-      DDCDDU=zero
-!      VMOL = ONE
 !---- VOLUMETRIC ------------------------------------------------------
 !     STRAIN-ENERGY
-CALL vol(ssev,pv,ppv,k,det,dete,dets)
-!----------------------------------------------------------------------
+CALL vol(ssev,pv,ppv,k,det)
+
 !---- ISOCHORIC ISOTROPIC ---------------------------------------------
-!----------------------------------------------------------------------
 IF (phi < one) THEN
-!     ISOTROPIC STRAIN-ENERGY
+!     STRAIN-ENERGY
   CALL isomat(sseiso,diso,c10,c01,cbari1,cbari2)
 !     PK2 'FICTICIOUS' STRESS TENSOR
   CALL pk2isomatfic(pkmatfic,diso,cbar,cbari1,unit2,ndi)
 !     CAUCHY 'FICTICIOUS' STRESS TENSOR
   CALL sigisomatfic(sisomatfic,pkmatfic,distgr,det,ndi)
 !     'FICTICIOUS' MATERIAL ELASTICITY TENSOR
-  CALL cmatisomatfic(cmisomatfic,cbar,cbari1,cbari2,  &
-      diso,unit2,unit4,det,ndi)
+  CALL cmatisomatfic(cmisomatfic,cbar,cbari1,cbari2, diso,unit2,unit4,det,ndi)
 !     'FICTICIOUS' SPATIAL ELASTICITY TENSOR
   CALL csisomatfic(cisomatfic,cmisomatfic,distgr,det,ndi)
   
 END IF
-!----------------------------------------------------------------------
-!---- FILAMENTOUS NETWORK ---------------------------------------------
-!----------------------------------------------------------------------
+!---- FILAMENTS NETWORK -----------------------------------------------
 !     IMAGINARY ERROR FUNCTION BASED ON DISPERSION PARAMETER
 CALL erfi(efi,bb,nterm)
-!----------------------------------------------------------------------
-!       ONLY SPATIAL TENSORS ARE CORRECT ...
-!------------ NONAFFINE NETWORK --------------
-factor = 6 !720 points
-IF (nn > zero) THEN
 !     'FICTICIOUS' PK2 STRESS AND MATERIAL ELASTICITY TENSORS
-!      CALL NAFFMATNETFIC(PKNETFICNAF,CMNETFICNAF,DISTGR,MF0,RW,FILPROPS,
-!     1                               NAFFPROPS,DET,NDI)
-!     'FICTICIOUS' CAUCHY STRESS AND SPATIAL ELASTICITY TENSORS
-!  CALL naffnetfic_bazant(snetficnaf,cnetficnaf,distgr,mf0,rw,filprops,  &
-!      naffprops,det,ndi)
-   CALL naffnetfic_discrete(snetficnaf,cnetficnaf,distgr,mf0,rw,filprops,  &
-      naffprops,det,factor,ndi)
-END IF
 !------------ AFFINE NETWORK --------------
-IF (nna > zero) THEN
-!      CALL AFFMATCLNETFIC(PKNETFICAF,CMNETFICAF,DISTGR,MF0,RW,FILPROPS,
-!     1                        AFFPROPS,EFI,NOEL,DET,NDI)
- ! CALL affclnetfic_bazant(snetficafp,cnetficafp,distgr,mf0,rw,filprops,  &
- !     affprops,efi,noel,det,ndi)
-!      
-  CALL affclnetfic_discrete(snetficafp,cnetficafp,distgr,mf0,rw,filprops,  &
+IF (nn > zero) THEN
+  CALL affclnetfic_discrete(snetficaf,cnetficaf,distgr,filprops,  &
       affprops,efi,noel,det,factor,ndi)
 END IF
-!----------------------------------------------------------------------
-!      PKNETFIC=PKNETFICAF+PKNETFICNAF
-snetfic=snetficnaf+snetficafp
-!      CMNETFIC=CMNETFICAF+CMNETFICNAF
-cnetfic=cnetficnaf+cnetficafp
+
+!      PKNETFIC=PKNETFICNAF+PKNETFICAF
+snetfic=snetficnaf+snetficaf
+!      CMNETFIC=CMNETFICNAF+CMNETFICAF
+cnetfic=cnetficnaf+cnetficaf
 !----------------------------------------------------------------------
 !     STRAIN-ENERGY
 !      SSE=SSEV+SSEISO
 !     PK2 'FICTICIOUS' STRESS
-!      PKFIC=(ONE-PHI)*PKMATFIC+PKNETFIC
+pkfic=(one-phi)*pkmatfic+pknetfic
 !     CAUCHY 'FICTICIOUS' STRESS
 sfic=(one-phi)*sisomatfic+snetfic
 !     MATERIAL 'FICTICIOUS' ELASTICITY TENSOR
-!      CMFIC=(ONE-PHI)*CMISOMATFIC+CMNETFIC
+cmfic=(one-phi)*cmisomatfic+cmnetfic
 !     SPATIAL 'FICTICIOUS' ELASTICITY TENSOR
 cfic=(one-phi)*cisomatfic+cnetfic
 
@@ -344,33 +284,37 @@ cfic=(one-phi)*cisomatfic+cnetfic
 
 !---- VOLUMETRIC ------------------------------------------------------
 !      PK2 STRESS
-!      CALL PK2VOL(PKVOL,PV,C,NDI)
+CALL pk2vol(pkvol,pv,c,ndi)
 !      CAUCHY STRESS
 CALL sigvol(svol,pv,unit2,ndi)
 
 !---- ISOCHORIC -------------------------------------------------------
 !      PK2 STRESS
-!      CALL PK2ISO(PKISO,PKFIC,PROJL,DETE,NDI)
+CALL pk2iso(pkiso,pkfic,projl,det,ndi)
 !      CAUCHY STRESS
 CALL sigiso(siso,sfic,proje,ndi)
+!      ACTIVE CAUCHY STRESS
+!      CALL SIGISO(SACTISO,SNETFICAF,PROJE,NDI)
+
+!      CALL SPECTRAL(SACTISO,SACTVL,SACTVC)
 
 !---- VOLUMETRIC + ISOCHORIC ------------------------------------------
 !      PK2 STRESS
-!      PK2   = PKVOL + PKISO
+pk2 = pkvol + pkiso
 !      CAUCHY STRESS
 sigma = svol + siso
-!
+
 !----------------------------------------------------------------------
 !-------------------- MATERIAL ELASTICITY TENSOR ----------------------
 !----------------------------------------------------------------------
 
 !---- VOLUMETRIC ------------------------------------------------------
 
-!      CALL METVOL(CMVOL,C,PV,PPV,DETE,NDI)
+!      CALL METVOL(CMVOL,C,PV,PPV,DET,NDI)
 
 !---- ISOCHORIC -------------------------------------------------------
 
-!      CALL METISO(CMISO,CMFIC,PROJL,PKISO,PKFIC,C,UNIT2,DETE,NDI)
+!      CALL METISO(CMISO,CMFIC,PROJL,PKISO,PKFIC,C,UNIT2,DET,NDI)
 
 !----------------------------------------------------------------------
 
@@ -390,34 +334,54 @@ CALL setiso(ciso,cfic,proje,siso,sfic,unit2,ndi)
 
 !-----JAUMMAN RATE ----------------------------------------------------
 
-!      CALL SETJR(CJR,SIGMA,UNIT2,NDI)
+CALL setjr(cjr,sigma,unit2,ndi)
 
 !----------------------------------------------------------------------
 
 !     ELASTICITY TENSOR
-ddsigdde=cvol+ciso!+CJR
+ddsigdde=cvol+ciso+cjr
 
-!----------------------------------------------------------------------
+
 !----------------------------------------------------------------------
 !------------------------- INDEX ALLOCATION ---------------------------
 !----------------------------------------------------------------------
 !     VOIGT NOTATION  - FULLY SIMMETRY IMPOSED
-!      CALL INDEXX(STRESS,DDSDDE,SIGMA,DDSIGDDE,NTENS,NDI)
+CALL indexx(stress,ddsdde,sigma,ddsigdde,ntens,ndi)
+
 !----------------------------------------------------------------------
 !--------------------------- STATE VARIABLES --------------------------
 !----------------------------------------------------------------------
 !     DO K1 = 1, NTENS
 !      STATEV(1:27) = VISCOUS TENSORS
-CALL sdvwrite(statev,phitau,cr,sigma(1,2))
+CALL sdvwrite(det,statev)
 !     END DO
 !----------------------------------------------------------------------
-!if(npt == 1) then 
-!write(*,*) cbari1, statev
-!endif
-      
 RETURN
-END SUBROUTINE material
+END SUBROUTINE umat
 !----------------------------------------------------------------------
 !--------------------------- END OF UMAT ------------------------------
+!----------------------------------------------------------------------
+
+!----------------------------------------------------------------------
+!----------------------- AUXILIAR SUBROUTINES -------------------------
+!----------------------------------------------------------------------
+!                         INPUT FILES
+!----------------------------------------------------------------------
+
+!----------------------------------------------------------------------
+!                         KINEMATIC QUANTITIES
+!----------------------------------------------------------------------
+!----------------------------------------------------------------------
+!                         STRESS TENSORS
+!----------------------------------------------------------------------
+!----------------------------------------------------------------------
+!                   LINEARISED ELASTICITY TENSORS
+!----------------------------------------------------------------------
+
+
+!----------------------------------------------------------------------
+!----------------------------------------------------------------------
+!----------------------------------------------------------------------
+!----------------------- UTILITY SUBROUTINES --------------------------
 !----------------------------------------------------------------------
 

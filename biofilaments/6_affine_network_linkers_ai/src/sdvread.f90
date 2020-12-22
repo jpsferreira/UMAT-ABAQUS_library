@@ -1,18 +1,11 @@
-SUBROUTINE sdvread(statev,phi_t,cr)
-
-
-
-!>     READ STATE VARS
+SUBROUTINE sdvread(statev)
 use global
-IMPLICIT NONE
-
+implicit none
+!>    VISCOUS DISSIPATION: READ STATE VARS
 DOUBLE PRECISION, INTENT(IN)             :: statev(nsdv)
-DOUBLE PRECISION, INTENT(OUT)            :: cr,phi_t
-!DOUBLE PRECISION, INTENT(IN OUT)         :: dmudx(3,1)
 
 
-phi_t=statev(1)
-cr=statev(2)
+
 
 RETURN
 

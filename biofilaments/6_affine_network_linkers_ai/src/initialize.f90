@@ -1,14 +1,17 @@
-SUBROUTINE initialize(statev,phi0)
-
-
+SUBROUTINE initialize(statev)
 use global
 IMPLICIT NONE
 
-
+!      DOUBLE PRECISION TIME(2),KSTEP
+INTEGER :: pos1
 DOUBLE PRECISION, INTENT(OUT)            :: statev(nsdv)
-DOUBLE PRECISION, INTENT(IN)            :: phi0
 
-statev(1)=phi0
+
+pos1=0
+!       DETERMINANT
+statev(pos1+1)=one
+!        CONTRACTION VARIANCE
+statev(pos1+2)=zero
 
 RETURN
 
