@@ -1,0 +1,9 @@
+*Solid Section, elset=main_element, material=UD
+*Material, name=UD
+*User Material, constants=4
+<KBULK>,<C10>,<BETA>,<PSIHALF>
+*DEPVAR
+3,
+1, DET, "DET"
+2, SEFMAX, "accumulated strain energy"
+3, DMG, "damage"
