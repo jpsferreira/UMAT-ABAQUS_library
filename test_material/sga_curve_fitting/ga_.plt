@@ -1,6 +1,6 @@
 set xlabel "Generation"
 set ylabel "Fitness"
-m="./plot_.out"
+m="./plot_ga.out"
 #set terminal x11 0
 set terminal postscript eps enhanced color
 set output 'ga_soft_tissue.eps'

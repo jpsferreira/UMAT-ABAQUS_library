@@ -165,7 +165,7 @@ c
 c
       OPEN (UNIT=24, FILE='ga.out', STATUS='UNKNOWN')
       rewind 24
-      OPEN (UNIT=48, FILE='plot.out', STATUS='UNKNOWN')
+      OPEN (UNIT=48, FILE='plot_ga.out', STATUS='UNKNOWN')
       rewind 48
       OPEN (UNIT=49, FILE='plot_par.out', STATUS='UNKNOWN')
       rewind 49

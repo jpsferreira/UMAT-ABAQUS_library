@@ -431,8 +431,7 @@ C--------------------------- STATE VARIABLES --------------------------
 C----------------------------------------------------------------------
 C
 C                2PK
-      CALL MATINV3D(DFGRD1,DFGRDINV,DET)
-      CALL PULL2(PK2,SIGMA,DFGRDINV,DET,NDI)
+      CALL PULL2(PK2,SIGMA,DFGRD1INV,DET,NDI)
       
 C                1PK
       PK1 = MATMUL(DFGRD1,PK2)

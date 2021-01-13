@@ -103,8 +103,8 @@ call UEXTERNALD(0,0,0.0,0.0,0,0)
          CALL UMAT(STRESS,STATEV,DDSDDE,SSE,SPD,SCD,RPL,DDSDDT, DRPLDE,DRPLDT,STRAN,     &
          DSTRAN,TIME,DTIME,TEMP,DTEMP,PREDEF,DPRED,CMNAME,NDI,NSHR,NTENS,NSTATEV,PROPS,  &
          NPROPS,COORDS,DROT,PNEWDT,CELENT,DFGRD0,DFGRD1,NOEL,NPT,LAYER,KSPT,KSTEP,KINC)
-          write(50,*) gamma,sexp,stress(1)
-          aux2(j1)=sexp-stress(1)
+          write(50,*) gamma,sexp,statev(3),stress(1)
+          aux2(j1)=sexp-statev(3)
           aux2(j1)=aux2(j1)*aux2(j1)
         enddo
         close(50)

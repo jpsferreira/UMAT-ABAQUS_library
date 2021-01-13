@@ -167,7 +167,7 @@
 !
       OPEN (UNIT=24, FILE='ga.out', STATUS='UNKNOWN')
       rewind 24
-      OPEN (UNIT=48, FILE='plot.out', STATUS='UNKNOWN')
+      OPEN (UNIT=48, FILE='plot_ga.out', STATUS='UNKNOWN')
       rewind 48
       OPEN (UNIT=49, FILE=DIRC, STATUS='UNKNOWN')
       rewind 49
@@ -1114,7 +1114,7 @@
          ! FREE MATERIAL PROPERTIES
          PROPS(2)=parent(1,j)
          PROPS(4)=parent(2,j)
-          PROPS(5)=parent(3,j)
+         PROPS(5)=parent(3,j)
          PROPS(6)=parent(4,j) 
 !
           funcval=0.d0
