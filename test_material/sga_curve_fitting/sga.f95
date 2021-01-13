@@ -13,7 +13,7 @@
       dimension ibest(nchrmax)
       dimension parmax(nparmax),parmin(nparmax),pardel(nparmax)
       dimension geni(1000000),genavg(1000000),genmax(1000000)
-      real*4 cpu,cpu0,cpu1,tarray(2)
+      real*4 cpu,cpu0,cpu1,tarray(2),t_results
 !
       common / ga1   / npopsiz,nowrite
       common / ga2   / nparam,nchrome
@@ -29,7 +29,7 @@
 !
 !
 !
-      call etime(tarray)
+      call etime(tarray,t_results)
       write(6,*) tarray(1),tarray(2)
       cpu0=tarray(1)
 !
@@ -98,7 +98,7 @@
          evals=float(npopsiz)*geni(i)
          write(24,3100) geni(i),evals,genavg(i),genmax(i)
  100  continue
-      call etime(tarray)
+      call etime(tarray,t_results)
 !      write(6,*) tarray(1),tarray(2)
       cpu1=tarray(1)
       cpu=(cpu1-cpu0)
@@ -111,8 +111,8 @@
  1400 format(2X,'CPU time for all generations=',E12.6,' sec'/  &
           2X,'                             ',E12.6,' min') 
 ! 1050 format(1x,' #      Binary Code',48x,'  Param1  Param2  Param3  Param4  Fitness')
- !1050 format(1x,' #      Binary Code',32x,'  Param1  Param2  Param3  Param4  Fitness')
-  1050 format(1x,' #      Binary Code',4x,'  Param1  Param2  Param3  Param4  Fitness')
+ 1050 format(1x,' #      Binary Code',32x,'  Param1  Param2  Param3  Param4  Fitness')
+  !1050 format(1x,' #      Binary Code',4x,'  Param1  Param2  Param3  Param4  Fitness')
  !1050 format(1x,' #      Binary Code',2x,'  Param1  Param2  Param3  Param4  Fitness')
  1111 format(//'#################  Generation',i5,'  #################')
  1225 format(/'  Number of Crossovers      =',i5)
@@ -403,7 +403,7 @@
 !
  !1075 format(i3,1x,64i1,4(1x,f7.4),1x,f8.5)
  !1075 format(i3,1x,32i1,4(1x,f7.4),1x,f8.5)
- 1075 format(i3,1x,20i1,4(1x,f7.4),1x,f8.5)
+ 1075 format(i3,1x,48i1,4(1x,f7.4),1x,f8.5)
  !1075 format(i3,1x,16i1,4(1x,f7.4),1x,f8.5)
  1100 format(1x,'Average Function Value of Generation=',f8.5)
  1200 format(1x,'Maximum Function Value              =',f8.5/)
@@ -1098,40 +1098,24 @@
           NOEL=1
           NPT=8
           ! FIXED MATERIAL PROPERTIES
-         ! D1
+         ! KBULK
          PROPS(1)=0.000001d0
          ! C10=
          PROPS(2)=1.00d0
          ! C01
-         PROPS(3)=1.00d0
-         !c3
+         PROPS(3)=0.00d0
+         !k1
          PROPS(4)=0.0d0
-         !c4
+         !k2
          PROPS(5)=.0001d0
-         !c5
-         PROPS(6)=0.0d0
-         !c6
-         PROPS(7)=.0001d0
-         !kappa
-         PROPS(8)=0.0d0
-         !betam
-         PROPS(9)=1.d0
-         !semmin
-         PROPS(10)=10.d0
-         !semmax
-         PROPS(11)=1.d0
-         !betaf
-         PROPS(12)=1.d0  
-         !sefmin
-         PROPS(13)=10.d0
-         !sefmax
-         PROPS(14)=1.d0  
+         !kdisp
+         PROPS(6)=0.0d0  
          !       do 11 i=1,nparam
          ! FREE MATERIAL PROPERTIES
          PROPS(2)=parent(1,j)
-         PROPS(3)=parent(2,j)
-          PROPS(4)=parent(3,j)
-         PROPS(5)=parent(4,j) 
+         PROPS(4)=parent(2,j)
+          PROPS(5)=parent(3,j)
+         PROPS(6)=parent(4,j) 
 !
           funcval=0.d0
         do 10 j1=1,npts
@@ -1151,6 +1135,7 @@
  !
  !        write(*,*) funcval
        funcval=1.d0/(1.d0+funcval)
+  !     funcval=-funcaval
  !      write(*,*) funcval
  !      write(*,*)
  !

@@ -12,7 +12,7 @@ INCLUDE 'PARAM_UMAT.INC'
       COMMON /KPAR/MATPAR
       DOUBLE PRECISION MF0(NWP,3),RW(NWP),PTS(NPTS,2),MATPAR(NNPAR)
       double precision aux2(npts),aux3(npts)
-      PARAMETER(NTENS = 6, NSTATEV = 10, NPROPS = 14, NDI=3, NSHR=3)
+      PARAMETER(NTENS = 6, NSTATEV = 2, NPROPS = 6, NDI=3, NSHR=3)
 
 CHARACTER*8 CMNAME,frmt
 DIMENSION STRESS(NTENS),STATEV(NSTATEV),DDSDDE(NTENS,NTENS),DDSDDT(NTENS),      &
@@ -70,40 +70,24 @@ call UEXTERNALD(0,0,0.0,0.0,0,0)
 !      BETAF  = PROPS(12)
 !      SEFMIN = PROPS(13)
 !      SEFMAX = PROPS(14)
-         ! D1
+         ! KBULK
          PROPS(1)=0.000001d0
          ! C10=
          PROPS(2)=1.00d0
          ! C01
-         PROPS(3)=1.00d0
-         !c3
+         PROPS(3)=0.00d0
+         !k1
          PROPS(4)=0.0d0
-         !c4
+         !k2
          PROPS(5)=.0001d0
-         !c5
-         PROPS(6)=0.0d0
-         !c6
-         PROPS(7)=.0001d0
-         !kappa
-         PROPS(8)=0.0d0
-         !betam
-         PROPS(9)=1.d0
-         !semmin
-         PROPS(10)=10.d0
-         !semmax
-         PROPS(11)=1.d0
-         !betaf
-         PROPS(12)=1.d0  
-         !sefmin
-         PROPS(13)=10.d0
-         !sefmax
-         PROPS(14)=1.d0         
+         !kdisp
+         PROPS(6)=0.0d0     
 !
          ! FREE MATERIAL PROPERTIES
          PROPS(2)=matpar(1)
-         PROPS(3)=matpar(2)
-         PROPS(4)=matpar(3)
-         PROPS(5)=matpar(4)
+         PROPS(4)=matpar(2)
+         PROPS(5)=matpar(3)
+         PROPS(6)=matpar(4)
          !  11   continue
           gamma=0.d0
           OPEN (UNIT=50, FILE=DIRCC, STATUS='UNKNOWN')
@@ -144,8 +128,8 @@ call UEXTERNALD(0,0,0.0,0.0,0,0)
         write(59,*) matpar(1), matpar(2), matpar(3), matpar(4), matpar(3)/(4.d0*matpar(1)*matpar(4))
         CLOSE(59)
 !       
-        CALL SYSTEM('gnuplot -p'// ' ' // DIRDD)
-        CALL SYSTEM('gnuplot -p'// ' ' // DIRD)
+        ! CALL SYSTEM('gnuplot -p'// ' ' // DIRDD)
+        ! CALL SYSTEM('gnuplot -p'// ' ' // DIRD)
         write(*,*) 'PLOTS generated at:'
         write(*,*)
         write(*,*) dirdd

@@ -1,0 +1,24 @@
+$ga
+irestrt=0,
+microga=1,
+npopsiz=5,
+nparam= 4,
+pmutate=0.01d0,
+maxgen=301,
+idum=-11000,
+pcross=0.6d0,
+itourny=1,
+ielite=1,
+icreep=1,
+pcreep=0.02d0,
+iunifrm=1,
+iniche=1,
+nchild=2,
+iskip= 0, iend= 0,
+nowrite=1,
+kountmx=5,
+parmin= 0.0d0, 0.d0, 0.0001d0, 0.001d0
+parmax= 12.0d0,  12.d0, 4.0d0, 0.001d0
+nposibl=4*4096,
+nichflg=1, 1, 1, 1
+$end
