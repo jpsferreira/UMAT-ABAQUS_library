@@ -196,7 +196,7 @@ C     ISOCHORIC ANISOTROPIC CONTRIBUTION
       DOUBLE PRECISION VORIF(3),VD(3),M0(3,3),MM(3,3),
      1        VORIF2(3),VD2(3),N0(3,3),NN(3,3)
 C     LIST VARS OF OTHER CONTRIBUTIONS HERE
-C
+      DOUBLE PRECISION PK1(NDI,NDI)
 C     VISCOUS PROPERTIES (GENERALIZED MAXWEL DASHPOTS)
       DOUBLE PRECISION VSCPROPS(6)
       INTEGER VV
@@ -429,6 +429,15 @@ C
 C----------------------------------------------------------------------
 C--------------------------- STATE VARIABLES --------------------------
 C----------------------------------------------------------------------
+C
+C                2PK
+      CALL MATINV3D(DFGRD1,DFGRDINV,DET)
+      CALL PULL2(PK2,SIGMA,DFGRDINV,DET,NDI)
+      
+C                1PK
+      PK1 = MATMUL(DFGRD1,PK2)
+      STATEV(3) = PK1(1,1)
+C
 C     DO K1 = 1, NTENS
 C      STATEV(1:27) = VISCOUS TENSORS
        CALL SDVWRITE(DET,LAMBDA,STATEV)
