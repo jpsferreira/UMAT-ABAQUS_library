@@ -33,7 +33,8 @@ CHARACTER(256) DIR2
 PARAMETER (DIR2='prefdir.inp')
 
 
-END module global!>********************************************************************
+END module global
+!>********************************************************************
 !> Record of revisions:                                              |
 !>        Date        Programmer        Description of change        |
 !>        ====        ==========        =====================        |
@@ -300,7 +301,7 @@ CALL csisomatfic(cisomatfic,cmisomatfic,distgr,det,ndi)
 !     IMAGINARY ERROR FUNCTION BASED ON DISPERSION PARAMETER
 CALL erfi(efi,bdisp,nterm)
 !
-factor = 6
+factor = 4
 CALL anisomat_discrete(sseaniso,sanisomatfic,canisomatfic,distgr,props, &
     efi,noel, det, factor, ndi )
 
@@ -604,72 +605,11 @@ bdisp    = props(6)
   
         CALL bangle(ang,f,mfi,noel,ndi)
         CALL density(rho,ang,bdisp,efi)
-       ! rho=rho/(four*pi)
-        !strain-like of fiber i
-        ei = lambdai-one
-         !calculate fiber sef and sef derivatives values
-        if (ei .ge. zero) then
-          !fiber sef
-          wi   = (kk1/(two*kk2))*(dexp(kk2*ei*ei)-one)
-          ! fiber derivatives
-          dwi  = kk1*ei*dexp(kk2*ei*ei)
-          ddwi = kk1*dexp(kk2*ei*ei)*(two*kk2*ei*ei+one)
-          !stress and material  tangent 
-        CALL sigfibfic(sfibfic,rho,dwi,mfi,ai,ndi)
-        ! 
-        CALL csfibfic(cfibfic,rho,dwi,ddwi,mfi,ai,ndi)
-!
-        DO j1=1,ndi
-           DO k1=1,ndi
-              sfic(j1,k1)=sfic(j1,k1)+aux*sfibfic(j1,k1)
-              DO l1=1,ndi
-                DO m1=1,ndi
-                  cfic(j1,k1,l1,m1)=cfic(j1,k1,l1,m1)+aux2*cfibfic(j1,k1,l1,m1)
-                END DO
-              END DO
-           END DO
-         END DO
-!
-        w=w+rho*ai*wi
-        aa=aa+1
-       endif
-        rr = rr +  rho*ai
-        node_num = node_num + 1  
-        area_total = area_total + ai
-        write(*,*) node_num, ang,rho
-      end do
-    end do
-!
-!  The other subtriangles have the opposite direction from the face.
-!  Generate each in turn, by determining the barycentric coordinates
-!  of the centroid (F1,F2,F3), from which we can also work out the barycentric
-!  coordinates of the vertices of the subtriangle.
-!
-    do f3 = 2, 3 * factor - 4, 3
-      do f2 = 2, 3 * factor - f3 - 2, 3
-
-        f1 = 3 * factor - f3 - f2
-
-        call sphere01_triangle_project ( a_xyz, b_xyz, c_xyz, f1, f2, f3, &
-          node_xyz )
-
-        call sphere01_triangle_project ( &
-          a_xyz, b_xyz, c_xyz, f1 - 2, f2 + 1, f3 + 1, a2_xyz )
-        call sphere01_triangle_project ( &
-          a_xyz, b_xyz, c_xyz, f1 + 1, f2 - 2, f3 + 1, b2_xyz )
-        call sphere01_triangle_project ( &
-          a_xyz, b_xyz, c_xyz, f1 + 1, f2 + 1, f3 - 2, c2_xyz )
-
-        call sphere01_triangle_vertices_to_area ( a2_xyz, b2_xyz, c2_xyz, ai )
-
-        !direction of the sphere triangle barycenter - direction i
-        mf0i=node_xyz
-        CALL deffib(lambdai,mfi,mf0i,f,ndi)
-  
-        CALL bangle(ang,f,mfi,noel,ndi)
-        CALL density(rho,ang,bdisp,efi)
+        !scaled weight
+        ai = ai/(two*pi)
         !rho=rho/(four*pi)
         !strain-like of fiber i
+        lambdai=lambdai*lambdai
         ei = lambdai-one
          !calculate fiber sef and sef derivatives values
         if (ei .ge. zero) then
@@ -700,12 +640,79 @@ bdisp    = props(6)
         rr = rr +  rho*ai
         node_num = node_num + 1  
         area_total = area_total + ai
-        write(*,*) node_num, ang,rho
+        write(*,*) node_num,ang, rho
       end do
     end do
+! !
+! !  The other subtriangles have the opposite direction from the face.
+! !  Generate each in turn, by determining the barycentric coordinates
+! !  of the centroid (F1,F2,F3), from which we can also work out the barycentric
+! !  coordinates of the vertices of the subtriangle.
+! !
+!     do f3 = 2, 3 * factor - 4, 3
+!       do f2 = 2, 3 * factor - f3 - 2, 3
 
-  end do
-!
+!         f1 = 3 * factor - f3 - f2
+
+!         call sphere01_triangle_project ( a_xyz, b_xyz, c_xyz, f1, f2, f3, &
+!           node_xyz )
+
+!         call sphere01_triangle_project ( &
+!           a_xyz, b_xyz, c_xyz, f1 - 2, f2 + 1, f3 + 1, a2_xyz )
+!         call sphere01_triangle_project ( &
+!           a_xyz, b_xyz, c_xyz, f1 + 1, f2 - 2, f3 + 1, b2_xyz )
+!         call sphere01_triangle_project ( &
+!           a_xyz, b_xyz, c_xyz, f1 + 1, f2 + 1, f3 - 2, c2_xyz )
+
+!         call sphere01_triangle_vertices_to_area ( a2_xyz, b2_xyz, c2_xyz, ai )
+
+!         !direction of the sphere triangle barycenter - direction i
+!         mf0i=node_xyz
+!         CALL deffib(lambdai,mfi,mf0i,f,ndi)
+  
+!         CALL bangle(ang,f,mfi,noel,ndi)
+!         CALL density(rho,ang,bdisp,efi)
+!         !scaled weight
+!         ai = ai/(four*pi)
+!         !rho=rho/(four*pi)
+!         !strain-like of fiber i
+!         lambdai=lambdai*lambdai
+!         ei = lambdai-one
+!          !calculate fiber sef and sef derivatives values
+!         if (ei .ge. zero) then
+!           !fiber sef
+!           wi   = (kk1/(two*kk2))*(dexp(kk2*ei*ei)-one)
+!           ! fiber derivatives
+!           dwi  = kk1*ei*dexp(kk2*ei*ei)
+!           ddwi = kk1*dexp(kk2*ei*ei)*(two*kk2*ei*ei+one)
+!           !stress and material  tangent 
+!         CALL sigfibfic(sfibfic,rho,dwi,mfi,ai,ndi)
+!         ! 
+!         CALL csfibfic(cfibfic,rho,dwi,ddwi,mfi,ai,ndi)
+!         !
+!         DO j1=1,ndi
+!            DO k1=1,ndi
+!               sfic(j1,k1)=sfic(j1,k1)+aux*sfibfic(j1,k1)
+!               DO l1=1,ndi
+!                 DO m1=1,ndi
+!                   cfic(j1,k1,l1,m1)=cfic(j1,k1,l1,m1)+aux2*cfibfic(j1,k1,l1,m1)
+!                 END DO
+!               END DO
+!            END DO
+!          END DO
+! !
+!         w=w+rho*ai*wi
+!         aa=aa+1
+!        endif
+!         rr = rr +  rho*ai
+!         node_num = node_num + 1  
+!         area_total = area_total + ai
+!         write(*,*) node_num,ang, rho
+!       end do
+!     end do
+
+   end do
+! !
 !  Discard allocated memory.
 !
   deallocate ( edge_point )
@@ -1159,8 +1166,6 @@ b=matmul(f,transpose(f))
 RETURN
 END SUBROUTINE deformation
 SUBROUTINE density(rho,ang,bb,erfi)
-
-
 
 !>    SINGLE FILAMENT: DENSITY FUNCTION VALUE
 use global
@@ -2371,7 +2376,7 @@ INTEGER :: i1,j1
 
 DOUBLE PRECISION :: aux
 
-aux = rho*rw*dw
+aux = rho*dw*rw
 DO i1=1,ndi
   DO j1=1,ndi
     sfic(i1,j1)=aux*m(i1)*m(j1)

@@ -265,7 +265,7 @@ CALL csisomatfic(cisomatfic,cmisomatfic,distgr,det,ndi)
 !     IMAGINARY ERROR FUNCTION BASED ON DISPERSION PARAMETER
 CALL erfi(efi,bdisp,nterm)
 !
-factor = 6
+factor = 4
 CALL anisomat_discrete(sseaniso,sanisomatfic,canisomatfic,distgr,props, &
     efi,noel, det, factor, ndi )
 

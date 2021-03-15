@@ -46,11 +46,11 @@ PROPS(1)=2.d0/100000.d0
 ! C10=
 PROPS(2)=1.00d0
 ! C01
-PROPS(3)=1.00d0
+PROPS(3)=0.00d0
 !k1
 PROPS(4)=1.00d0
 !k2
-PROPS(5)=0.1d0
+PROPS(5)=1.0d0
 !kappa
 PROPS(6)=0.0d0
 !

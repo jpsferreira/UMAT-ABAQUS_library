@@ -52,7 +52,7 @@ PROPS(4)=5.63d0
 !k2
 PROPS(5)=14.25d0
 !bdisp
-PROPS(6)=5.01d0
+PROPS(6)=5.0d0
 !
 ! !viscous parameters - maxwell
 ! ! v - number of dashpots

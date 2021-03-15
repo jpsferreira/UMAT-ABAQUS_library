@@ -1,7 +1,5 @@
 SUBROUTINE density(rho,ang,bb,erfi)
 
-
-
 !>    SINGLE FILAMENT: DENSITY FUNCTION VALUE
 use global
 IMPLICIT NONE
