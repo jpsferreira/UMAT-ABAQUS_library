@@ -1,12 +1,12 @@
 PROGRAM TEST_GENERAL_UMAT
 use,intrinsic :: ISO_Fortran_env
 use global
-INCLUDE 'ABA_PARAM.INC'
+INCLUDE 'aba_param.inc'
 
 !C     ADD COMMON BLOCKS HERE IF NEEDED ()
 !C      COMMON /KBLOCK/KBLOCK
 
-PARAMETER(NTENS = 6, NSTATEV = NSDV, NPROPS = 6, NDI=3, NSHR=3)
+PARAMETER(NTENS = 6, NSTATEV = NSDV, NPROPS = 7, NDI=3, NSHR=3)
 PARAMETER(NOEL = 1, NPT = 8)
 !
 CHARACTER*8 CMNAME
@@ -53,6 +53,8 @@ PROPS(4)=5.63d0
 PROPS(5)=14.25d0
 !bdisp
 PROPS(6)=5.0d0
+!factor
+PROPS(7)=4
 !
 ! !viscous parameters - maxwell
 ! ! v - number of dashpots

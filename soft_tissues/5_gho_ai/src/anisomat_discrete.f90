@@ -169,7 +169,7 @@ bdisp    = props(6)
         rr = rr +  rho*ai
         node_num = node_num + 1  
         area_total = area_total + ai
-        write(*,*) node_num,ang, rho
+       ! write(*,*) node_num,ang, rho
       end do
     end do
 ! !
@@ -249,6 +249,6 @@ bdisp    = props(6)
   deallocate ( face_point )
   deallocate ( point_coord )
 
-write(*,*) w,rr,area_total
+!write(*,*) w,rr,area_total
 RETURN
 END SUBROUTINE anisomat_discrete

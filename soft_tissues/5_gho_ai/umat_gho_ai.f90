@@ -233,6 +233,8 @@ c01      = props(3)
 k1      = props(4)
 k2      = props(5)
 bdisp   = props(6)
+! discretization factor
+factor  = props(7)
 !     VISCOUS EFFECTS: MAXWELL ELEMENTS (MAX:3)
 !      VV       = INT(PROPS(7))
 !      VSCPROPS = PROPS(8:13)
@@ -263,9 +265,9 @@ CALL deformation(distgr,cbar,bbar,ndi)
 CALL fibdir(fibori,m0,mm,nelem,noel,ndi,vorif,vd,distgr,dfgrd1)
 !     INVARIANTS OF DEVIATORIC DEFORMATION TENSORS
 CALL invariants(cbar,cbari1,cbari2,ndi)
-
+!
 CALL pinvariants(cbar,cbari4,ndi,m0,lambda,barlambda,det)
-
+!
 !     STRETCH TENSORS
 CALL stretch(cbar,bbar,ubar,vbar,ndi)
 !     ROTATION TENSORS
@@ -301,7 +303,6 @@ CALL csisomatfic(cisomatfic,cmisomatfic,distgr,det,ndi)
 !     IMAGINARY ERROR FUNCTION BASED ON DISPERSION PARAMETER
 CALL erfi(efi,bdisp,nterm)
 !
-factor = 4
 CALL anisomat_discrete(sseaniso,sanisomatfic,canisomatfic,distgr,props, &
     efi,noel, det, factor, ndi )
 
@@ -640,7 +641,7 @@ bdisp    = props(6)
         rr = rr +  rho*ai
         node_num = node_num + 1  
         area_total = area_total + ai
-        write(*,*) node_num,ang, rho
+       ! write(*,*) node_num,ang, rho
       end do
     end do
 ! !
@@ -720,7 +721,7 @@ bdisp    = props(6)
   deallocate ( face_point )
   deallocate ( point_coord )
 
-write(*,*) w,rr,area_total
+!write(*,*) w,rr,area_total
 RETURN
 END SUBROUTINE anisomat_discrete
 SUBROUTINE bangle(ang,f,mf,noel,ndi)
@@ -2245,6 +2246,38 @@ statev(pos1+2)=lambda
 RETURN
 
 END SUBROUTINE sdvwrite
+SUBROUTINE setjr(cjr,sigma,unit2,ndi)
+
+
+use global
+IMPLICIT NONE
+!>    JAUMAN RATE CONTRIBUTION FOR THE SPATIAL ELASTICITY TENSOR
+
+INTEGER, INTENT(IN)                      :: ndi
+DOUBLE PRECISION, INTENT(OUT)            :: cjr(ndi,ndi,ndi,ndi)
+DOUBLE PRECISION, INTENT(IN OUT)         :: sigma(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN OUT)         :: unit2(ndi,ndi)
+
+
+
+INTEGER :: i1,j1,k1,l1
+
+
+DO i1 = 1, ndi
+  DO j1 = 1, ndi
+    DO k1 = 1, ndi
+      DO l1 = 1, ndi
+        
+        cjr(i1,j1,k1,l1)= (one/two)*(unit2(i1,k1)*sigma(j1,l1)  &
+            +sigma(i1,k1)*unit2(j1,l1)+unit2(i1,l1)*sigma(j1,k1)  &
+            +sigma(i1,l1)*unit2(j1,k1))
+      END DO
+    END DO
+  END DO
+END DO
+
+RETURN
+END SUBROUTINE setjr
 SUBROUTINE setiso(ciso,cfic,pe,siso,sfic,unit2,ndi)
 
 
@@ -2294,38 +2327,6 @@ END DO
 
 RETURN
 END SUBROUTINE setiso
-SUBROUTINE setjr(cjr,sigma,unit2,ndi)
-
-
-use global
-IMPLICIT NONE
-!>    JAUMAN RATE CONTRIBUTION FOR THE SPATIAL ELASTICITY TENSOR
-
-INTEGER, INTENT(IN)                      :: ndi
-DOUBLE PRECISION, INTENT(OUT)            :: cjr(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION, INTENT(IN OUT)         :: sigma(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN OUT)         :: unit2(ndi,ndi)
-
-
-
-INTEGER :: i1,j1,k1,l1
-
-
-DO i1 = 1, ndi
-  DO j1 = 1, ndi
-    DO k1 = 1, ndi
-      DO l1 = 1, ndi
-        
-        cjr(i1,j1,k1,l1)= (one/two)*(unit2(i1,k1)*sigma(j1,l1)  &
-            +sigma(i1,k1)*unit2(j1,l1)+unit2(i1,l1)*sigma(j1,k1)  &
-            +sigma(i1,l1)*unit2(j1,k1))
-      END DO
-    END DO
-  END DO
-END DO
-
-RETURN
-END SUBROUTINE setjr
 SUBROUTINE setvol(cvol,pv,ppv,unit2,unit4s,ndi)
 
 

@@ -73,13 +73,13 @@ DOUBLE PRECISION, INTENT(IN OUT)         :: celent
 DOUBLE PRECISION, INTENT(IN OUT)         :: dfgrd0(3,3)
 DOUBLE PRECISION, INTENT(IN OUT)         :: dfgrd1(3,3)
 
-COMMON /kfib/fibori
+COMMON /kfilp/prefdir
 
 
 
 
 
-DOUBLE PRECISION :: fibori(nelem,4)
+DOUBLE PRECISION :: prefdir(nelem,4)
 
 
 
@@ -197,6 +197,8 @@ c01      = props(3)
 k1      = props(4)
 k2      = props(5)
 bdisp   = props(6)
+! discretization factor
+factor  = props(7)
 !     VISCOUS EFFECTS: MAXWELL ELEMENTS (MAX:3)
 !      VV       = INT(PROPS(7))
 !      VSCPROPS = PROPS(8:13)
@@ -227,9 +229,9 @@ CALL deformation(distgr,cbar,bbar,ndi)
 CALL fibdir(fibori,m0,mm,nelem,noel,ndi,vorif,vd,distgr,dfgrd1)
 !     INVARIANTS OF DEVIATORIC DEFORMATION TENSORS
 CALL invariants(cbar,cbari1,cbari2,ndi)
-
+!
 CALL pinvariants(cbar,cbari4,ndi,m0,lambda,barlambda,det)
-
+!
 !     STRETCH TENSORS
 CALL stretch(cbar,bbar,ubar,vbar,ndi)
 !     ROTATION TENSORS
@@ -265,7 +267,6 @@ CALL csisomatfic(cisomatfic,cmisomatfic,distgr,det,ndi)
 !     IMAGINARY ERROR FUNCTION BASED ON DISPERSION PARAMETER
 CALL erfi(efi,bdisp,nterm)
 !
-factor = 4
 CALL anisomat_discrete(sseaniso,sanisomatfic,canisomatfic,distgr,props, &
     efi,noel, det, factor, ndi )
 
