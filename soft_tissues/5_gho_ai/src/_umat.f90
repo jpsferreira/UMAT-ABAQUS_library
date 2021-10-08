@@ -226,7 +226,7 @@ CALL matinv3d(distgr,distgrinv,ndi)
 CALL deformation(dfgrd1,c,b,ndi)
 CALL deformation(distgr,cbar,bbar,ndi)
 !     FIBER UNIT VECTOR AND STRUCTURAL TENSOR
-CALL fibdir(fibori,m0,mm,nelem,noel,ndi,vorif,vd,distgr,dfgrd1)
+CALL fibdir(prefdir,m0,mm,nelem,noel,ndi,vorif,vd,distgr,dfgrd1)
 !     INVARIANTS OF DEVIATORIC DEFORMATION TENSORS
 CALL invariants(cbar,cbari1,cbari2,ndi)
 !
