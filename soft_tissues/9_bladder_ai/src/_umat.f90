@@ -72,13 +72,11 @@ DOUBLE PRECISION, INTENT(IN OUT)         :: pnewdt
 DOUBLE PRECISION, INTENT(IN OUT)         :: celent
 DOUBLE PRECISION, INTENT(IN OUT)         :: dfgrd0(3,3)
 DOUBLE PRECISION, INTENT(IN OUT)         :: dfgrd1(3,3)
-
+!
 COMMON /kfilp/prefdir
-
+!
 DOUBLE PRECISION :: prefdir(nelem,4)
-
-
-
+!
 INTEGER :: nterm
 
 !     FLAGS
@@ -258,17 +256,21 @@ CALL sigisomatfic(sisomatfic,pkmatfic,distgr,det,ndi)
 CALL cmatisomatfic(cmisomatfic,cbar,cbari1,cbari2, diso,unit2,unit4,det,ndi)
 !     'FICTICIOUS' SPATIAL ELASTICITY TENSOR
 CALL csisomatfic(cisomatfic,cmisomatfic,distgr,det,ndi)
-
+!
 !---- FIBERS (ONE FAMILY)   -------------------------------------------
-
+!
 !CALL pk2anisomatfic(pkmatficaniso,daniso,cbar,cbari4,m0,ndi)
 !CALL push2(sanisomatfic,pkmatficaniso,distgr,det,ndi)
 !     IMAGINARY ERROR FUNCTION BASED ON DISPERSION PARAMETER
 CALL erfi(efi,bdisp,nterm)
 !
+! material configuration
+CALL manisomat_discrete(sseaniso,pkmatficaniso,cmanisomatfic,distgr,props, &
+    efi,noel, npt, kinc, det, factor, prefdir, ndi )
+!
+! spatial configuration
 CALL anisomat_discrete(sseaniso,sanisomatfic,canisomatfic,distgr,props, &
-    efi,noel, det, factor, ndi )
-
+    efi,noel, npt, kinc, det, factor, prefdir, ndi )
 !CALL cmatanisomatfic(cmanisomatfic,m0,daniso,unit2,det,ndi)
 !CALL push4(canisomatfic,cmanisomatfic,distgr,det,ndi)!
 !----------------------------------------------------------------------
@@ -276,7 +278,7 @@ CALL anisomat_discrete(sseaniso,sanisomatfic,canisomatfic,distgr,props, &
 !----------------------------------------------------------------------
 !     STRAIN-ENERGY
 sse=ssev+sseiso+sseaniso
-!     PK2 'FICTICIOUS' STRESS
+!     PK2   'FICTICIOUS' STRESS
 pkfic=pkmatfic+pkmatficaniso
 !     CAUCHY 'FICTICIOUS' STRESS
 sfic=sisomatfic+sanisomatfic
@@ -284,37 +286,37 @@ sfic=sisomatfic+sanisomatfic
 cmfic=cmisomatfic+cmanisomatfic
 !     SPATIAL 'FICTICIOUS' ELASTICITY TENSOR
 cfic=cisomatfic+canisomatfic
-
+!
 !----------------------------------------------------------------------
 !-------------------------- STRESS MEASURES ---------------------------
 !----------------------------------------------------------------------
-
+!
 !---- VOLUMETRIC ------------------------------------------------------
 !      PK2 STRESS
 CALL pk2vol(pkvol,pv,c,ndi)
 !      CAUCHY STRESS
 CALL sigvol(svol,pv,unit2,ndi)
-
+!
 !---- ISOCHORIC -------------------------------------------------------
 !      PK2 STRESS
 CALL pk2iso(pkiso,pkfic,projl,det,ndi)
 !      CAUCHY STRESS
 CALL sigiso(siso,sfic,proje,ndi)
-
+!
 !---- VOLUMETRIC + ISOCHORIC ------------------------------------------
 !      PK2 STRESS
 pk2   = pkvol + pkiso
 !      CAUCHY STRESS
 sigma = svol  + siso
-
+!
 !----------------------------------------------------------------------
 !-------------------- MATERIAL ELASTICITY TENSOR ----------------------
 !----------------------------------------------------------------------
-
+!
 !---- VOLUMETRIC ------------------------------------------------------
-
+!
 CALL metvol(cmvol,c,pv,ppv,det,ndi)
-
+!
 !---- ISOCHORIC -------------------------------------------------------
 
 CALL metiso(cmiso,cmfic,projl,pkiso,pkfic,c,unit2,det,ndi)
@@ -344,6 +346,14 @@ CALL setjr(cjr,sigma,unit2,ndi)
 !     ELASTICITY TENSOR
 ddsigdde=cvol+ciso+cjr
 
+
+!lets test pk2...
+call push4(ctest,ddpkdde,distgr,det,ndi)
+write(*,*) ctest-ciso-cvol
+write(*,*) '*********************************************'
+call push2(stest,pkiso,distgr,det,ndi)
+write(*,*) stest-siso
+write(*,*) '*********************************************'
 !----------------------------------------------------------------------
 !------------------------- INDEX ALLOCATION ---------------------------
 !----------------------------------------------------------------------

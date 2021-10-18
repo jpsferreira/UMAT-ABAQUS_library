@@ -1,5 +1,5 @@
 SUBROUTINE anisomat_discrete(w,sfic,cfic,f,props,  &
-        efi,noel,det,factor,ndi)
+        efi,noel,npt,kinc,det,factor,prefdir,ndi)
 
 !>    AFFINE NETWORK: 'FICTICIOUS' CAUCHY STRESS AND ELASTICITY TENSOR
 !> DISCRETE ANGULAR INTEGRATION SCHEME (icosahedron)
@@ -12,7 +12,7 @@ DOUBLE PRECISION, INTENT(OUT)            :: cfic(ndi,ndi,ndi,ndi)
 DOUBLE PRECISION, INTENT(IN OUT)         :: f(ndi,ndi)
 DOUBLE PRECISION, INTENT(IN)             :: props(8)
 DOUBLE PRECISION, INTENT(IN OUT)         :: efi
-INTEGER, INTENT(IN OUT)                  :: noel
+INTEGER, INTENT(IN OUT)                  :: noel,npt,kinc
 DOUBLE PRECISION, INTENT(IN OUT)         :: det
 
 INTEGER :: j1,k1,l1,m1
@@ -22,6 +22,7 @@ DOUBLE PRECISION :: aux,lambdai,dwi,ddwi,ddwi1,ddwi2,ddwi3
 DOUBLE PRECISION :: bdisp,ang,w,wi,rho,aux2,lambdain,lf
 DOUBLE PRECISION :: aic,ais
 DOUBLE PRECISION :: avga,maxa,suma,dirmax(ndi),kk1,kk2,ei
+DOUBLE PRECISION :: prefdir(nelem,4)
 
 ! INTEGRATION SCHEME
   integer ( kind = 4 ) node_num
@@ -133,7 +134,7 @@ lf       = props(7)
         mf0i=node_xyz
         CALL deffib(lambdai,mfi,mf0i,f,ndi)
   
-        CALL bangle(ang,f,mfi,noel,ndi)
+        CALL bangle(ang,f,mfi,noel,prefdir,ndi)
         CALL density(rho,ang,bdisp,efi)
         !scaled weight
         ai = ai/(two*pi)

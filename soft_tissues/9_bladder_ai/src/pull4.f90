@@ -1,9 +1,5 @@
 SUBROUTINE pull4(mat,spatial,finv,det,ndi)
-
-
-
 !>        PULL-BACK TIMES DET OF 4TH ORDER TENSOR
-
 use global
 IMPLICIT NONE
 

@@ -42,9 +42,7 @@ CALL contraction44(cisoaux,cisoaux1,plt,ndi)
 trfic=zero
 aux=det**(-two/three)
 aux1=aux**two
-DO i1=1,ndi
-  trfic=trfic+aux*pkfic(i1,i1)
-END DO
+CALL contraction22(trfic,aux*pkfic,c,ndi)
 
 DO i1=1,ndi
   DO j1=1,ndi

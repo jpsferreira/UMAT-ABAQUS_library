@@ -186,6 +186,31 @@ statev(9+pos)=hv(3,3)
 RETURN
 
 END SUBROUTINE hvwrite
+SUBROUTINE contraction22(aux,lt,rt,ndi)
+!>       DOUBLE CONTRACTION BETWEEN 2nd ORDER AND 2ND ORDER  TENSOR
+!>      INPUT:
+!>       LT - RIGHT 2ND ORDER TENSOR
+!>       RT - LEFT  2nd ODER TENSOR
+!>      OUTPUT:
+!>       aux - DOUBLE CONTRACTED TENSOR (scalar)
+use global
+IMPLICIT NONE
+
+INTEGER, INTENT(IN)                      :: ndi
+DOUBLE PRECISION, INTENT(IN)             :: lt(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN)             :: rt(ndi,ndi)
+DOUBLE PRECISION, INTENT(OUT)            :: aux
+INTEGER :: i1,j1
+
+
+    aux=zero
+    DO i1=1,ndi
+      DO j1=1,ndi
+        aux=aux+lt(i1,j1)*rt(j1,i1)
+      END DO
+    END DO
+RETURN
+END SUBROUTINE contraction22
 SUBROUTINE pk2anisomatfic(afic,daniso,cbar,inv4,st0,ndi)
 !
 use global
@@ -643,6 +668,273 @@ END DO
 RETURN
 
 END SUBROUTINE tensorprod2
+SUBROUTINE manisomat_discrete(w,pkfic,cmfic,f,props,  &
+        efi,noel,npt,kinc,det,factor,prefdir,ndi)
+!
+!>    AFFINE NETWORK: 'FICTICIOUS' CAUCHY STRESS AND ELASTICITY TENSOR
+!> DISCRETE ANGULAR INTEGRATION SCHEME (icosahedron)
+use global
+IMPLICIT NONE
+
+INTEGER, INTENT(IN)                      :: ndi
+DOUBLE PRECISION, INTENT(OUT)            :: pkfic(ndi,ndi)
+DOUBLE PRECISION, INTENT(OUT)            :: cmfic(ndi,ndi,ndi,ndi)
+DOUBLE PRECISION, INTENT(IN OUT)         :: f(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN)             :: props(8)
+DOUBLE PRECISION, INTENT(IN OUT)         :: efi
+INTEGER, INTENT(IN OUT)                  :: noel,npt,kinc
+DOUBLE PRECISION, INTENT(IN OUT)         :: det
+
+INTEGER :: j1,k1,l1,m1
+DOUBLE PRECISION :: sfibfic(ndi,ndi), cfibfic(ndi,ndi,ndi,ndi)
+DOUBLE PRECISION :: mfi(ndi),mf0i(ndi)
+DOUBLE PRECISION :: aux,lambdai,dwi,ddwi,ddwi1,ddwi2,ddwi3
+DOUBLE PRECISION :: bdisp,ang,w,wi,rho,aux2,lambdain,lf
+DOUBLE PRECISION :: aic,ais
+DOUBLE PRECISION :: avga,maxa,suma,dirmax(ndi),kk1,kk2,ei
+DOUBLE PRECISION :: prefdir(nelem,4)
+
+! INTEGRATION SCHEME
+  integer ( kind = 4 ) node_num
+  integer ( kind = 4 ) a
+  real ( kind = 8 ) a_xyz(3)
+  real ( kind = 8 ) a2_xyz(3)
+  real ( kind = 8 ) ai !area of triangle i
+  real ( kind = 8 ) area_total
+  integer ( kind = 4 ) b
+  real ( kind = 8 ) b_xyz(3)
+  real ( kind = 8 ) b2_xyz(3)
+  integer ( kind = 4 ) c
+  real ( kind = 8 ) c_xyz(3)
+  real ( kind = 8 ) c2_xyz(3)
+  integer ( kind = 4 ) edge_num
+  integer ( kind = 4 ), allocatable, dimension ( :, : ) :: edge_point
+  integer ( kind = 4 ) f1
+  integer ( kind = 4 ) f2
+  integer ( kind = 4 ) f3
+  integer ( kind = 4 ) face
+  integer ( kind = 4 ) face_num
+  integer ( kind = 4 ), allocatable, dimension ( : ) :: face_order
+  integer ( kind = 4 ), allocatable, dimension ( :, : ) :: face_point
+  integer ( kind = 4 ) face_order_max
+  integer ( kind = 4 ) factor
+  real ( kind = 8 ) node_xyz(3)
+  real ( kind = 8 ), parameter :: pi = 3.141592653589793D+00
+  real ( kind = 8 ), allocatable, dimension ( :, : ) :: point_coord
+  integer ( kind = 4 ) point_num
+  real ( kind = 8 ) rr, aa
+  real ( kind = 8 ) v
+
+
+!  Size the icosahedron.
+!
+  call icos_size ( point_num, edge_num, face_num, face_order_max )
+!
+!  Set the icosahedron.
+!
+  allocate ( point_coord(1:3,1:point_num) )
+  allocate ( edge_point(1:2,1:edge_num) )
+  allocate ( face_order(1:face_num) )
+  allocate ( face_point(1:face_order_max,1:face_num) )
+
+  call icos_shape ( point_num, edge_num, face_num, face_order_max, &
+    point_coord, edge_point, face_order, face_point )
+!
+!  Initialize the integral data.
+!
+  rr = 0.0D+00
+  area_total = 0.0D+00
+  node_num = 0
+  
+
+!! initialize the model data
+  !     fibers
+kk1      = props(4)
+kk2      = props(5)
+bdisp    = props(6)
+lf       = props(7)
+
+  aux=two*(det**(-one))
+  aux2=four*(det**(-four/three))
+  cmfic=zero
+  pkfic=zero
+
+  aa = zero
+  rr = zero
+  avga=zero
+  maxa=zero
+  suma=zero
+  dirmax=zero
+  
+!  Pick a face of the icosahedron, and identify its vertices as A, B, C.
+!
+  do face = 1, face_num
+!
+    a = face_point(1,face)
+    b = face_point(2,face)
+    c = face_point(3,face)
+!
+    a_xyz(1:3) = point_coord(1:3,a)
+    b_xyz(1:3) = point_coord(1:3,b)
+    c_xyz(1:3) = point_coord(1:3,c)
+!
+!  Some subtriangles will have the same direction as the face.
+!  Generate each in turn, by determining the barycentric coordinates
+!  of the centroid (F1,F2,F3), from which we can also work out the barycentric
+!  coordinates of the vertices of the subtriangle.
+!
+    do f3 = 1, 3 * factor - 2, 3
+      do f2 = 1, 3 * factor - f3 - 1, 3
+
+        f1 = 3 * factor - f3 - f2
+
+        call sphere01_triangle_project ( a_xyz, b_xyz, c_xyz, f1, f2, f3, &
+          node_xyz )
+
+        call sphere01_triangle_project ( &
+          a_xyz, b_xyz, c_xyz, f1 + 2, f2 - 1, f3 - 1, a2_xyz )
+        call sphere01_triangle_project ( &
+          a_xyz, b_xyz, c_xyz, f1 - 1, f2 + 2, f3 - 1, b2_xyz )
+        call sphere01_triangle_project ( &
+          a_xyz, b_xyz, c_xyz, f1 - 1, f2 - 1, f3 + 2, c2_xyz )
+
+        call sphere01_triangle_vertices_to_area ( a2_xyz, b2_xyz, c2_xyz, ai )
+
+        !direction of the sphere triangle barycenter - direction i
+        mf0i=node_xyz
+        CALL deffib(lambdai,mfi,mf0i,f,ndi)
+  
+        CALL bangle(ang,f,mfi,noel,prefdir,ndi)
+        CALL density(rho,ang,bdisp,efi)
+        !scaled weight
+        ai = ai/(two*pi)
+        !rho=rho/(four*pi)
+        !strain-like of fiber i
+        !lambdai=lambdai*lambdai
+        lambdai=lambdai/lf
+        ei = lambdai-one
+         !calculate fiber sef and sef derivatives values
+        if (ei .ge. zero) then
+          !fiber sef
+          wi   = (kk1/(two*kk2))*(dexp(kk2*ei*ei)-one)
+          ! fiber derivatives
+          !gho
+          !dwi  = kk1*ei*dexp(kk2*ei*ei)
+          !ddwi = kk1*dexp(kk2*ei*ei)*(two*kk2*ei*ei+one)
+          !bladder model
+          dwi=(kk1/(two*sqrt(lambdai)))*((sqrt(lambdai)-one)*(dexp(kk2*(sqrt(lambdai)-one)*(sqrt(lambdai)-one))))
+          ddwi1=(kk1*kk2*(sqrt(lambdai)-one)*(sqrt(lambdai)-one)*(dexp(kk2*(sqrt(lambdai)-one)*(sqrt(lambdai)-one))))/(two*lambdai)
+          ddwi2=(kk1*(dexp(kk2*(sqrt(lambdai)-one)*(sqrt(lambdai)-one))))/(four*lambdai)
+          ddwi3=(-kk1*(sqrt(lambdai)-one)*(dexp(kk2*(sqrt(lambdai)-one)*(sqrt(lambdai)-one))))/(four*(lambdai**(three/two)))
+          ddwi=ddwi1+ddwi2+ddwi3
+          !update weight
+          ais=ai*lambdai**(-one)*lambdai**(-two)
+          !stress and material  tangent
+        CALL sigfibfic(sfibfic,rho,dwi,mf0i,ais,ndi)
+        ! 
+          aic=ais*lambdai**(-one)*lambdai**(-two)
+        CALL csfibfic(cfibfic,rho,dwi,ddwi,mf0i,aic,ndi)
+!
+        DO j1=1,ndi
+           DO k1=1,ndi
+              pkfic(j1,k1)=pkfic(j1,k1)+aux*sfibfic(j1,k1)
+              DO l1=1,ndi
+                DO m1=1,ndi
+                  cmfic(j1,k1,l1,m1)=cmfic(j1,k1,l1,m1)+aux2*cfibfic(j1,k1,l1,m1)
+                END DO
+              END DO
+           END DO
+         END DO
+!
+        w=w+rho*ai*wi
+        aa=aa+1
+       endif
+        rr = rr +  rho*ai
+        node_num = node_num + 1  
+        area_total = area_total + ai
+        !write(*,*) node_num,ang, rho
+      end do
+    end do
+! !
+! !  The other subtriangles have the opposite direction from the face.
+! !  Generate each in turn, by determining the barycentric coordinates
+! !  of the centroid (F1,F2,F3), from which we can also work out the barycentric
+! !  coordinates of the vertices of the subtriangle.
+! !
+!     do f3 = 2, 3 * factor - 4, 3
+!       do f2 = 2, 3 * factor - f3 - 2, 3
+
+!         f1 = 3 * factor - f3 - f2
+
+!         call sphere01_triangle_project ( a_xyz, b_xyz, c_xyz, f1, f2, f3, &
+!           node_xyz )
+
+!         call sphere01_triangle_project ( &
+!           a_xyz, b_xyz, c_xyz, f1 - 2, f2 + 1, f3 + 1, a2_xyz )
+!         call sphere01_triangle_project ( &
+!           a_xyz, b_xyz, c_xyz, f1 + 1, f2 - 2, f3 + 1, b2_xyz )
+!         call sphere01_triangle_project ( &
+!           a_xyz, b_xyz, c_xyz, f1 + 1, f2 + 1, f3 - 2, c2_xyz )
+
+!         call sphere01_triangle_vertices_to_area ( a2_xyz, b2_xyz, c2_xyz, ai )
+
+!         !direction of the sphere triangle barycenter - direction i
+!         mf0i=node_xyz
+!         CALL deffib(lambdai,mfi,mf0i,f,ndi)
+  
+!         CALL bangle(ang,f,mfi,noel,ndi)
+!         CALL density(rho,ang,bdisp,efi)
+!         !scaled weight
+!         ai = ai/(four*pi)
+!         !rho=rho/(four*pi)
+!         !strain-like of fiber i
+!         lambdai=lambdai*lambdai
+!         ei = lambdai-one
+!          !calculate fiber sef and sef derivatives values
+!         if (ei .ge. zero) then
+!           !fiber sef
+!           wi   = (kk1/(two*kk2))*(dexp(kk2*ei*ei)-one)
+!           ! fiber derivatives
+!           dwi  = kk1*ei*dexp(kk2*ei*ei)
+!           ddwi = kk1*dexp(kk2*ei*ei)*(two*kk2*ei*ei+one)
+!           !stress and material  tangent 
+!         CALL sigfibfic(sfibfic,rho,dwi,mfi,ai,ndi)
+!         ! 
+!         CALL csfibfic(cfibfic,rho,dwi,ddwi,mfi,ai,ndi)
+!         !
+!         DO j1=1,ndi
+!            DO k1=1,ndi
+!               sfic(j1,k1)=sfic(j1,k1)+aux*sfibfic(j1,k1)
+!               DO l1=1,ndi
+!                 DO m1=1,ndi
+!                   cfic(j1,k1,l1,m1)=cfic(j1,k1,l1,m1)+aux2*cfibfic(j1,k1,l1,m1)
+!                 END DO
+!               END DO
+!            END DO
+!          END DO
+! !
+!         w=w+rho*ai*wi
+!         aa=aa+1
+!        endif
+!         rr = rr +  rho*ai
+!         node_num = node_num + 1  
+!         area_total = area_total + ai
+!         write(*,*) node_num,ang, rho
+!       end do
+!     end do
+
+   end do
+! !
+!  Discard allocated memory.
+!
+  deallocate ( edge_point )
+  deallocate ( face_order )
+  deallocate ( face_point )
+  deallocate ( point_coord )
+
+!write(*,*) w,rr,area_total
+RETURN
+END SUBROUTINE manisomat_discrete
 SUBROUTINE metvol(cvol,c,pv,ppv,det,ndi)
 
 
@@ -773,9 +1065,6 @@ END DO
 RETURN
 END SUBROUTINE factorial
 SUBROUTINE pull2(pk,sig,finv,det,ndi)
-
-
-
 !>       PULL-BACK TIMES DET OF A 2ND ORDER TENSOR
 use global
 IMPLICIT NONE
@@ -1045,13 +1334,11 @@ DOUBLE PRECISION, INTENT(IN OUT)         :: pnewdt
 DOUBLE PRECISION, INTENT(IN OUT)         :: celent
 DOUBLE PRECISION, INTENT(IN OUT)         :: dfgrd0(3,3)
 DOUBLE PRECISION, INTENT(IN OUT)         :: dfgrd1(3,3)
-
+!
 COMMON /kfilp/prefdir
-
+!
 DOUBLE PRECISION :: prefdir(nelem,4)
-
-
-
+!
 INTEGER :: nterm
 
 !     FLAGS
@@ -1231,17 +1518,21 @@ CALL sigisomatfic(sisomatfic,pkmatfic,distgr,det,ndi)
 CALL cmatisomatfic(cmisomatfic,cbar,cbari1,cbari2, diso,unit2,unit4,det,ndi)
 !     'FICTICIOUS' SPATIAL ELASTICITY TENSOR
 CALL csisomatfic(cisomatfic,cmisomatfic,distgr,det,ndi)
-
+!
 !---- FIBERS (ONE FAMILY)   -------------------------------------------
-
+!
 !CALL pk2anisomatfic(pkmatficaniso,daniso,cbar,cbari4,m0,ndi)
 !CALL push2(sanisomatfic,pkmatficaniso,distgr,det,ndi)
 !     IMAGINARY ERROR FUNCTION BASED ON DISPERSION PARAMETER
 CALL erfi(efi,bdisp,nterm)
 !
+! material configuration
+CALL manisomat_discrete(sseaniso,pkmatficaniso,cmanisomatfic,distgr,props, &
+    efi,noel, npt, kinc, det, factor, prefdir, ndi )
+!
+! spatial configuration
 CALL anisomat_discrete(sseaniso,sanisomatfic,canisomatfic,distgr,props, &
-    efi,noel, det, factor, ndi )
-
+    efi,noel, npt, kinc, det, factor, prefdir, ndi )
 !CALL cmatanisomatfic(cmanisomatfic,m0,daniso,unit2,det,ndi)
 !CALL push4(canisomatfic,cmanisomatfic,distgr,det,ndi)!
 !----------------------------------------------------------------------
@@ -1249,7 +1540,7 @@ CALL anisomat_discrete(sseaniso,sanisomatfic,canisomatfic,distgr,props, &
 !----------------------------------------------------------------------
 !     STRAIN-ENERGY
 sse=ssev+sseiso+sseaniso
-!     PK2 'FICTICIOUS' STRESS
+!     PK2   'FICTICIOUS' STRESS
 pkfic=pkmatfic+pkmatficaniso
 !     CAUCHY 'FICTICIOUS' STRESS
 sfic=sisomatfic+sanisomatfic
@@ -1257,37 +1548,37 @@ sfic=sisomatfic+sanisomatfic
 cmfic=cmisomatfic+cmanisomatfic
 !     SPATIAL 'FICTICIOUS' ELASTICITY TENSOR
 cfic=cisomatfic+canisomatfic
-
+!
 !----------------------------------------------------------------------
 !-------------------------- STRESS MEASURES ---------------------------
 !----------------------------------------------------------------------
-
+!
 !---- VOLUMETRIC ------------------------------------------------------
 !      PK2 STRESS
 CALL pk2vol(pkvol,pv,c,ndi)
 !      CAUCHY STRESS
 CALL sigvol(svol,pv,unit2,ndi)
-
+!
 !---- ISOCHORIC -------------------------------------------------------
 !      PK2 STRESS
 CALL pk2iso(pkiso,pkfic,projl,det,ndi)
 !      CAUCHY STRESS
 CALL sigiso(siso,sfic,proje,ndi)
-
+!
 !---- VOLUMETRIC + ISOCHORIC ------------------------------------------
 !      PK2 STRESS
 pk2   = pkvol + pkiso
 !      CAUCHY STRESS
 sigma = svol  + siso
-
+!
 !----------------------------------------------------------------------
 !-------------------- MATERIAL ELASTICITY TENSOR ----------------------
 !----------------------------------------------------------------------
-
+!
 !---- VOLUMETRIC ------------------------------------------------------
-
+!
 CALL metvol(cmvol,c,pv,ppv,det,ndi)
-
+!
 !---- ISOCHORIC -------------------------------------------------------
 
 CALL metiso(cmiso,cmfic,projl,pkiso,pkfic,c,unit2,det,ndi)
@@ -1317,6 +1608,14 @@ CALL setjr(cjr,sigma,unit2,ndi)
 !     ELASTICITY TENSOR
 ddsigdde=cvol+ciso+cjr
 
+
+!lets test pk2...
+call push4(ctest,ddpkdde,distgr,det,ndi)
+write(*,*) ctest-ciso-cvol
+write(*,*) '*********************************************'
+call push2(stest,pkiso,distgr,det,ndi)
+write(*,*) stest-siso
+write(*,*) '*********************************************'
 !----------------------------------------------------------------------
 !------------------------- INDEX ALLOCATION ---------------------------
 !----------------------------------------------------------------------
@@ -1436,11 +1735,7 @@ RETURN
 
 END SUBROUTINE initialize
 SUBROUTINE pull4(mat,spatial,finv,det,ndi)
-
-
-
 !>        PULL-BACK TIMES DET OF 4TH ORDER TENSOR
-
 use global
 IMPLICIT NONE
 
@@ -3057,7 +3352,7 @@ END DO
 RETURN
 END SUBROUTINE chemicalstat
 SUBROUTINE anisomat_discrete(w,sfic,cfic,f,props,  &
-        efi,noel,det,factor,ndi)
+        efi,noel,npt,kinc,det,factor,prefdir,ndi)
 
 !>    AFFINE NETWORK: 'FICTICIOUS' CAUCHY STRESS AND ELASTICITY TENSOR
 !> DISCRETE ANGULAR INTEGRATION SCHEME (icosahedron)
@@ -3070,7 +3365,7 @@ DOUBLE PRECISION, INTENT(OUT)            :: cfic(ndi,ndi,ndi,ndi)
 DOUBLE PRECISION, INTENT(IN OUT)         :: f(ndi,ndi)
 DOUBLE PRECISION, INTENT(IN)             :: props(8)
 DOUBLE PRECISION, INTENT(IN OUT)         :: efi
-INTEGER, INTENT(IN OUT)                  :: noel
+INTEGER, INTENT(IN OUT)                  :: noel,npt,kinc
 DOUBLE PRECISION, INTENT(IN OUT)         :: det
 
 INTEGER :: j1,k1,l1,m1
@@ -3080,6 +3375,7 @@ DOUBLE PRECISION :: aux,lambdai,dwi,ddwi,ddwi1,ddwi2,ddwi3
 DOUBLE PRECISION :: bdisp,ang,w,wi,rho,aux2,lambdain,lf
 DOUBLE PRECISION :: aic,ais
 DOUBLE PRECISION :: avga,maxa,suma,dirmax(ndi),kk1,kk2,ei
+DOUBLE PRECISION :: prefdir(nelem,4)
 
 ! INTEGRATION SCHEME
   integer ( kind = 4 ) node_num
@@ -3191,7 +3487,7 @@ lf       = props(7)
         mf0i=node_xyz
         CALL deffib(lambdai,mfi,mf0i,f,ndi)
   
-        CALL bangle(ang,f,mfi,noel,ndi)
+        CALL bangle(ang,f,mfi,noel,prefdir,ndi)
         CALL density(rho,ang,bdisp,efi)
         !scaled weight
         ai = ai/(two*pi)
@@ -3322,9 +3618,7 @@ lf       = props(7)
 !write(*,*) w,rr,area_total
 RETURN
 END SUBROUTINE anisomat_discrete
-SUBROUTINE bangle(ang,f,mf,noel,ndi)
-
-
+SUBROUTINE bangle(ang,f,mf,noel,prefdir,ndi)
 
 !>    ANGLE BETWEEN FILAMENT AND PREFERED DIRECTION
 
@@ -3336,16 +3630,13 @@ DOUBLE PRECISION, INTENT(OUT)            :: ang
 DOUBLE PRECISION, INTENT(IN OUT)         :: f(ndi,ndi)
 DOUBLE PRECISION, INTENT(IN)             :: mf(ndi)
 INTEGER, INTENT(IN OUT)                  :: noel
-
-
-
-COMMON /kfilp/prefdir
+!
 DOUBLE PRECISION :: prefdir(nelem,4)
-
+!
 INTEGER :: inoel,i,j
 DOUBLE PRECISION :: dnorm,pdir(ndi), mfa(ndi),aux
 DOUBLE PRECISION :: c(ndi,ndi),egvc(ndi,ndi),egvl(ndi)
-
+!
 inoel=0
 i=0
 DO i=1,nelem
@@ -3354,7 +3645,7 @@ DO i=1,nelem
     inoel=i
   END IF
 END DO
-
+!
 DO i=1,ndi
   j=i+1
 !       PREFERED ORIENTATION  ORIENTATION NORMALIZED
@@ -3372,8 +3663,7 @@ END DO
 !     PREFERED ORIENTATION
 dnorm=dot_product(pdir,pdir)
 dnorm=DSQRT(dnorm)
-
-!       PREFERED ORIENTATION  NORMALIZED
+!     PREFERED ORIENTATION  NORMALIZED
 pdir=pdir/dnorm
 
 !       FILAMENT ORIENTATION
@@ -4056,9 +4346,7 @@ CALL contraction44(cisoaux,cisoaux1,plt,ndi)
 trfic=zero
 aux=det**(-two/three)
 aux1=aux**two
-DO i1=1,ndi
-  trfic=trfic+aux*pkfic(i1,i1)
-END DO
+CALL contraction22(trfic,aux*pkfic,c,ndi)
 
 DO i1=1,ndi
   DO j1=1,ndi

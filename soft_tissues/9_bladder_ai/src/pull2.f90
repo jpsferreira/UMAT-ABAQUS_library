@@ -1,7 +1,4 @@
 SUBROUTINE pull2(pk,sig,finv,det,ndi)
-
-
-
 !>       PULL-BACK TIMES DET OF A 2ND ORDER TENSOR
 use global
 IMPLICIT NONE

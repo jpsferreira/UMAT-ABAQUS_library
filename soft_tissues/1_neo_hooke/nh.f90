@@ -40,7 +40,7 @@ time(2)=0.d0
 ! MATERIAL PROPERTIES
 !
 ! k PENALTY PARAMETER
-PROPS(1)=2.d0/100000.d0
+PROPS(1)=1000.d0
 ! ISOTROPIC MATRIX
 ! C10=
 PROPS(2)=1.00d0
@@ -81,7 +81,7 @@ RHO=0.D0
 !
 !################################################################################################!
 !!     TENSILE MONOTONIC LOAD TEST
- DFGRD1(1,1)=  1.2D0
+ DFGRD1(1,1)=  3.0D0
  DFGRD1(1,2)=  0.0D0
  DFGRD1(1,3)=  0.0d0
  DFGRD1(2,1)=  0.0d0

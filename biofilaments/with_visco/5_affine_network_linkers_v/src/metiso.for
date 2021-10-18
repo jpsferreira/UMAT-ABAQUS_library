@@ -32,9 +32,8 @@ C
       TRFIC=ZERO
       AUX=DET**(-TWO/THREE)
       AUX1=AUX**TWO
-      DO I1=1,NDI
-         TRFIC=TRFIC+AUX*PKFIC(I1,I1)
-      END DO
+      CALL CONTRACTION22(TRFIC,AUX*PKFIC,C,NDI)
+
 C
       DO I1=1,NDI
         DO J1=1,NDI

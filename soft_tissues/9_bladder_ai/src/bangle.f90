@@ -1,6 +1,4 @@
-SUBROUTINE bangle(ang,f,mf,noel,ndi)
-
-
+SUBROUTINE bangle(ang,f,mf,noel,prefdir,ndi)
 
 !>    ANGLE BETWEEN FILAMENT AND PREFERED DIRECTION
 
@@ -12,16 +10,13 @@ DOUBLE PRECISION, INTENT(OUT)            :: ang
 DOUBLE PRECISION, INTENT(IN OUT)         :: f(ndi,ndi)
 DOUBLE PRECISION, INTENT(IN)             :: mf(ndi)
 INTEGER, INTENT(IN OUT)                  :: noel
-
-
-
-COMMON /kfilp/prefdir
+!
 DOUBLE PRECISION :: prefdir(nelem,4)
-
+!
 INTEGER :: inoel,i,j
 DOUBLE PRECISION :: dnorm,pdir(ndi), mfa(ndi),aux
 DOUBLE PRECISION :: c(ndi,ndi),egvc(ndi,ndi),egvl(ndi)
-
+!
 inoel=0
 i=0
 DO i=1,nelem
@@ -30,7 +25,7 @@ DO i=1,nelem
     inoel=i
   END IF
 END DO
-
+!
 DO i=1,ndi
   j=i+1
 !       PREFERED ORIENTATION  ORIENTATION NORMALIZED
@@ -48,8 +43,7 @@ END DO
 !     PREFERED ORIENTATION
 dnorm=dot_product(pdir,pdir)
 dnorm=DSQRT(dnorm)
-
-!       PREFERED ORIENTATION  NORMALIZED
+!     PREFERED ORIENTATION  NORMALIZED
 pdir=pdir/dnorm
 
 !       FILAMENT ORIENTATION
