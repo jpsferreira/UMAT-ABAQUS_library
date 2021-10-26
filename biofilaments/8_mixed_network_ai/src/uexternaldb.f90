@@ -17,10 +17,7 @@ real(8), INTENT(IN OUT)                   :: dtime
 INTEGER, INTENT(IN OUT)                  :: kstep
 INTEGER, INTENT(IN OUT)                  :: kinc
 
-COMMON /kfil/mf0
-COMMON /kfilr/rw
 COMMON /kfilp/prefdir
-COMMON /kinit/init
 
 
 DOUBLE PRECISION :: prefdir(nelem,4), init(2)
@@ -39,11 +36,6 @@ IF(lop == 0.OR.lop == 4) THEN
     READ(16,*) (prefdir(i,j),j=1,4)
   END DO
   CLOSE(16)
-  !initial conditions
-  filename=jobdir(:lenjobdir)//'/'//dir3
-  OPEN(18,FILE=filename)
-  READ(18,*) (init(j),j=1,2)
-  CLOSE(18)
   
 END IF
 

@@ -285,7 +285,7 @@ IF (mm > zero) THEN
      frac(4)=0.522d0
      frac(4)=0.d0
   CALL affactnetfic_discrete(snetficaf,cnetficaf,distgr,filprops,  &
-      affprops,ru0,dtime,frac,efi,noel,varact,dirmax,det,factor,ndi)
+      affprops,ru0,dtime,frac,efi,noel,varact,dirmax,det,factor,prefdir,ndi)
 END IF
 
 !      PKNETFIC=PKNETFICNAF+PKNETFICAF

@@ -118,6 +118,8 @@ DOUBLE PRECISION :: cjr(ndi,ndi,ndi,ndi)
 !     CAUCHY STRESS AND ELASTICITY TENSOR
 DOUBLE PRECISION :: sigma(ndi,ndi),ddsigdde(ndi,ndi,ndi,ndi),  &
     ddpkdde(ndi,ndi,ndi,ndi)
+!     MICROSTRUCTURE STATE 
+DOUBLE PRECISION :: frac_pld,prefang
 !     TESTING/DEBUG VARS
 DOUBLE PRECISION :: stest(ndi,ndi), ctest(ndi,ndi,ndi,ndi)
 !----------------------------------------------------------------------
@@ -266,11 +268,11 @@ CALL erfi(efi,bdisp,nterm)
 !
 ! material configuration
 CALL manisomat_discrete(sseaniso,pkmatficaniso,cmanisomatfic,distgr,props, &
-    efi,noel, npt, kinc, det, factor, prefdir, ndi )
+    efi,noel, npt, kinc, det, factor, prefdir, prefang, frac_pld, ndi )
 !
 ! spatial configuration
 CALL anisomat_discrete(sseaniso,sanisomatfic,canisomatfic,distgr,props, &
-    efi,noel, npt, kinc, det, factor, prefdir, ndi )
+    efi,noel, npt, kinc, det, factor, prefdir, prefang, frac_pld, ndi )
 !CALL cmatanisomatfic(cmanisomatfic,m0,daniso,unit2,det,ndi)
 !CALL push4(canisomatfic,cmanisomatfic,distgr,det,ndi)!
 !----------------------------------------------------------------------
@@ -348,12 +350,12 @@ ddsigdde=cvol+ciso+cjr
 
 
 !lets test pk2...
-call push4(ctest,ddpkdde,distgr,det,ndi)
-write(*,*) ctest-ciso-cvol
-write(*,*) '*********************************************'
-call push2(stest,pkiso,distgr,det,ndi)
-write(*,*) stest-siso
-write(*,*) '*********************************************'
+! call push4(ctest,ddpkdde,distgr,det,ndi)
+! write(*,*) ctest-ciso-cvol
+! write(*,*) '*********************************************'
+! call push2(stest,pkiso,distgr,det,ndi)
+! write(*,*) stest-siso
+! write(*,*) '*********************************************'
 !----------------------------------------------------------------------
 !------------------------- INDEX ALLOCATION ---------------------------
 !----------------------------------------------------------------------
@@ -365,7 +367,7 @@ CALL indexx(stress,ddsdde,sigma,ddsigdde,ntens,ndi)
 !----------------------------------------------------------------------
 !     DO K1 = 1, NTENS
 !      STATEV(1:27) = VISCOUS TENSORS
-CALL sdvwrite(det,lambda,statev)
+CALL sdvwrite(det,lambda,frac_pld,prefang,statev)
 !     END DO
 !----------------------------------------------------------------------
 RETURN

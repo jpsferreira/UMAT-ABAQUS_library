@@ -268,7 +268,7 @@ CALL csisomatfic(cisomatfic,cmisomatfic,distgr,det,ndi)
 CALL erfi(efi,bdisp,nterm)
 !
 CALL anisomat_discrete(sseaniso,sanisomatfic,canisomatfic,distgr,props, &
-    efi,noel, det, factor, ndi )
+    efi,noel, det, factor, prefdir, ndi )
 
 
 !CALL cmatanisomatfic(cmanisomatfic,m0,daniso,unit2,det,ndi)

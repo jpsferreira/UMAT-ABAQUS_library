@@ -1,5 +1,5 @@
 SUBROUTINE manisomat_discrete(w,pkfic,cmfic,f,props,  &
-        efi,noel,npt,kinc,det,factor,prefdir,ndi)
+        efi,noel,npt,kinc,det,factor,prefdir,ang_pref,pulled,ndi)
 !
 !>    AFFINE NETWORK: 'FICTICIOUS' CAUCHY STRESS AND ELASTICITY TENSOR
 !> DISCRETE ANGULAR INTEGRATION SCHEME (icosahedron)
@@ -14,7 +14,8 @@ DOUBLE PRECISION, INTENT(IN)             :: props(8)
 DOUBLE PRECISION, INTENT(IN OUT)         :: efi
 INTEGER, INTENT(IN OUT)                  :: noel,npt,kinc
 DOUBLE PRECISION, INTENT(IN OUT)         :: det
-
+DOUBLE PRECISION, INTENT(OUT)            :: pulled
+!
 INTEGER :: j1,k1,l1,m1
 DOUBLE PRECISION :: sfibfic(ndi,ndi), cfibfic(ndi,ndi,ndi,ndi)
 DOUBLE PRECISION :: mfi(ndi),mf0i(ndi)
@@ -23,6 +24,7 @@ DOUBLE PRECISION :: bdisp,ang,w,wi,rho,aux2,lambdain,lf
 DOUBLE PRECISION :: aic,ais
 DOUBLE PRECISION :: avga,maxa,suma,dirmax(ndi),kk1,kk2,ei
 DOUBLE PRECISION :: prefdir(nelem,4)
+DOUBLE PRECISION :: pd(3),lambda_pref,prefdir0(3),ang_pref
 
 ! INTEGRATION SCHEME
   integer ( kind = 4 ) node_num
@@ -95,6 +97,20 @@ lf       = props(7)
   maxa=zero
   suma=zero
   dirmax=zero
+
+  pulled = zero
+  
+  !preferred direction measures (macroscale measures)
+  prefdir0=prefdir(noel,2:4)
+  !calculate preferred direction in the deformed configuration
+  CALL deffib(lambda_pref,pd,prefdir0,f,ndi)
+  !update preferential direction - deformed configuration
+  pd=pd/dsqrt(dot_product(pd,pd))
+  !rotation of the preferred direction
+  prefdir0=prefdir0/dsqrt(dot_product(prefdir0,prefdir0))
+  ang_pref=dot_product(pd,prefdir0)
+  ang_pref=acos(ang_pref)
+
   
 !  Pick a face of the icosahedron, and identify its vertices as A, B, C.
 !
@@ -134,7 +150,7 @@ lf       = props(7)
         mf0i=node_xyz
         CALL deffib(lambdai,mfi,mf0i,f,ndi)
   
-        CALL bangle(ang,f,mfi,noel,prefdir,ndi)
+        CALL bangle(ang,f,mfi,noel,pd,ndi)
         CALL density(rho,ang,bdisp,efi)
         !scaled weight
         ai = ai/(two*pi)
@@ -177,7 +193,7 @@ lf       = props(7)
          END DO
 !
         w=w+rho*ai*wi
-        aa=aa+1
+        aa=aa+rho*ai
        endif
         rr = rr +  rho*ai
         node_num = node_num + 1  
@@ -255,6 +271,7 @@ lf       = props(7)
 
    end do
 ! !
+   pulled=aa/rr
 !  Discard allocated memory.
 !
   deallocate ( edge_point )

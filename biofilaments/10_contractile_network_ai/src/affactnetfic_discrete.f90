@@ -1,5 +1,5 @@
 SUBROUTINE affactnetfic_discrete(sfic,cfic,f,filprops,affprops,  &
-        ru0,dtime,frac,efi,noel,vara,dirmax,det,factor,ndi)
+        ru0,dtime,frac,efi,noel,vara,dirmax,det,factor,prefdir,ndi)
 
 !>    AFFINE NETWORK: 'FICTICIOUS' CAUCHY STRESS AND ELASTICITY TENSOR
 !> DISCRETE ANGULAR INTEGRATION SCHEME (icosahedron)
@@ -24,6 +24,9 @@ DOUBLE PRECISION :: l,r0f,r0,mu0,b0,beta,lambda0,rho,m,fi,ffi,dtime
 DOUBLE PRECISION :: r0c,etac,lambdaif
 DOUBLE PRECISION :: bdisp,fric,ffmax,ang, frac(4),ru0(720),ru
 DOUBLE PRECISION :: vara,avga,maxa,aux0,ffic,suma,rho0,dirmax(ndi)
+DOUBLE PRECISION :: prefdir(nelem,4)
+DOUBLE PRECISION :: pd(3),lambda_pref,prefdir0(3),ang_pref
+
 
 ! INTEGRATION SCHEME
   integer ( kind = 4 ) node_num
@@ -109,6 +112,13 @@ ffmax   = affprops(4)
   suma=zero
   dirmax=zero
 
+  !preferred direction measures (macroscale measures)
+  prefdir0=prefdir(noel,2:4)
+  !calculate preferred direction in the deformed configuration
+  CALL deffil(lambda_pref,pd,prefdir0,f,ndi)
+  !update preferential direction - deformed configuration
+  pd=pd/dsqrt(dot_product(pd,pd))
+
 !  Pick a face of the icosahedron, and identify its vertices as A, B, C.
 !
   do face = 1, face_num
@@ -162,7 +172,7 @@ ffmax   = affprops(4)
         ru0(node_num)=ru
       !       write(*,*) i1,     LAMBDAIF, ru
         
-        CALL bangle(ang,f,mfi,noel,ndi)
+        CALL bangle(ang,f,mfi,noel,pd,ndi)
         
         CALL density(rho,ang,bdisp,efi)
         
@@ -251,7 +261,7 @@ ffmax   = affprops(4)
         ru0(node_num)=ru
       !       write(*,*) i1,     LAMBDAIF, ru
         
-        CALL bangle(ang,f,mfi,noel,ndi)
+        CALL bangle(ang,f,mfi,noel,pd,ndi)
         
         CALL density(rho,ang,bdisp,efi)
         

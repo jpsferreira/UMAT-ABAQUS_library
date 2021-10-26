@@ -23,7 +23,6 @@ DOUBLE PRECISION :: aux,lambdai,dw,ddw,aux1,aux2,fi,ffi
 DOUBLE PRECISION :: l,r0,mu0,b0,beta,lambda,lambda0,n,pp
 
 
-
 ! INTEGRATION SCHEME
   integer ( kind = 4 ) node_num
   integer ( kind = 4 ) a
@@ -96,7 +95,6 @@ h=zero
 hh=zero
 hi=zero
 hhi=zero
-
 
 
 

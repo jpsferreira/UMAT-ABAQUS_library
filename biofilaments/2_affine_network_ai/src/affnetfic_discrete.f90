@@ -1,5 +1,5 @@
 SUBROUTINE affnetfic_discrete(sfic,cfic,f,filprops,affprops,  &
-        efi,noel,det,factor,ndi)
+        efi,noel,det,factor, prefdir,ndi)
 
 !>    AFFINE NETWORK: 'FICTICIOUS' CAUCHY STRESS AND ELASTICITY TENSOR
 !> DISCRETE ANGULAR INTEGRATION SCHEME (icosahedron)
@@ -23,6 +23,8 @@ DOUBLE PRECISION :: aux,lambdai,dwi,ddwi
 DOUBLE PRECISION :: l,r0,mu0,b0,beta,lambda0,rho,n,fi,ffi
 DOUBLE PRECISION :: bdisp,ang, frac(4)
 DOUBLE PRECISION :: avga,maxa,suma,dirmax(ndi)
+DOUBLE PRECISION :: prefdir(nelem,4)
+DOUBLE PRECISION :: pd(3),lambda_pref,prefdir0(3),ang_pref
 
 ! INTEGRATION SCHEME
   integer ( kind = 4 ) node_num
@@ -55,8 +57,6 @@ DOUBLE PRECISION :: avga,maxa,suma,dirmax(ndi)
   integer ( kind = 4 ) point_num
   real ( kind = 8 ) rr, aa
   real ( kind = 8 ) v
-
-
 
 !  Size the icosahedron.
 !
@@ -102,6 +102,13 @@ bdisp   = affprops(2)
   maxa=zero
   suma=zero
   dirmax=zero
+
+      !preferred direction measures (macroscale measures)
+  prefdir0=prefdir(noel,2:4)
+  !calculate preferred direction in the deformed configuration
+  CALL deffil(lambda_pref,pd,prefdir0,f,ndi)
+  !update preferential direction - deformed configuration
+  pd=pd/dsqrt(dot_product(pd,pd))
   
 !  Pick a face of the icosahedron, and identify its vertices as A, B, C.
 !
@@ -141,7 +148,7 @@ bdisp   = affprops(2)
         mf0i=node_xyz
         CALL deffil(lambdai,mfi,mf0i,f,ndi)
   
-        CALL bangle(ang,f,mfi,noel,ndi)
+        CALL bangle(ang,f,mfi,noel,pd,ndi)
   
         CALL density(rho,ang,bdisp,efi)
         !rho=one
@@ -198,7 +205,7 @@ bdisp   = affprops(2)
         mf0i=node_xyz
         CALL deffil(lambdai,mfi,mf0i,f,ndi)
   
-        CALL bangle(ang,f,mfi,noel,ndi)
+        CALL bangle(ang,f,mfi,noel,pd,ndi)
   
         CALL density(rho,ang,bdisp,efi)
         !rho=one

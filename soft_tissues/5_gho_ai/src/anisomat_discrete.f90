@@ -1,5 +1,5 @@
 SUBROUTINE anisomat_discrete(w,sfic,cfic,f,props,  &
-        efi,noel,det,factor,ndi)
+        efi,noel,det,factor,prefdir,ndi)
 
 !>    AFFINE NETWORK: 'FICTICIOUS' CAUCHY STRESS AND ELASTICITY TENSOR
 !> DISCRETE ANGULAR INTEGRATION SCHEME (icosahedron)
@@ -21,6 +21,8 @@ DOUBLE PRECISION :: mfi(ndi),mf0i(ndi)
 DOUBLE PRECISION :: aux,lambdai,dwi,ddwi
 DOUBLE PRECISION :: bdisp,ang,w,wi,rho,aux2
 DOUBLE PRECISION :: avga,maxa,suma,dirmax(ndi),kk1,kk2,ei
+DOUBLE PRECISION :: prefdir(nelem,4)
+DOUBLE PRECISION :: pd(3),lambda_pref,prefdir0(3),ang_pref
 
 ! INTEGRATION SCHEME
   integer ( kind = 4 ) node_num
@@ -94,6 +96,17 @@ bdisp    = props(6)
   suma=zero
   dirmax=zero
   
+    !preferred direction measures (macroscale measures)
+  prefdir0=prefdir(noel,2:4)
+  !calculate preferred direction in the deformed configuration
+  CALL deffib(lambda_pref,pd,prefdir0,f,ndi)
+  !update preferential direction - deformed configuration
+  pd=pd/dsqrt(dot_product(pd,pd))
+  !rotation of the preferred direction
+  !prefdir0=prefdir0/dsqrt(dot_product(prefdir0,prefdir0))
+  !ang_pref=dot_product(pd,prefdir0)
+  !ang_pref=acos(ang_pref)
+
 !  Pick a face of the icosahedron, and identify its vertices as A, B, C.
 !
   do face = 1, face_num
@@ -132,7 +145,7 @@ bdisp    = props(6)
         mf0i=node_xyz
         CALL deffib(lambdai,mfi,mf0i,f,ndi)
   
-        CALL bangle(ang,f,mfi,noel,ndi)
+        CALL bangle(ang,f,mfi,noel,pd,ndi)
         CALL density(rho,ang,bdisp,efi)
         !scaled weight
         ai = ai/(two*pi)

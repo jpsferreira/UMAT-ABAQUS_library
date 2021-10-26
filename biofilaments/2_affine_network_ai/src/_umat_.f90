@@ -265,7 +265,7 @@ CALL erfi(efi,bb,nterm)
 !------------ AFFINE NETWORK --------------
 IF (nn > zero) THEN
   CALL affnetfic_discrete(snetficaf,cnetficaf,distgr,filprops,  &
-      affprops,efi,noel,det,factor,ndi)
+      affprops,efi,noel,det,factor,prefdir,ndi)
 END IF
 
 !      PKNETFIC=PKNETFICNAF+PKNETFICAF

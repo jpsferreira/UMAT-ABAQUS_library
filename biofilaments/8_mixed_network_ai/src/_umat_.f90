@@ -20,9 +20,7 @@ use global
 IMPLICIT NONE
 !     PREFERED DIRETION
 COMMON /kfilp/prefdir
-!     CHEMICAL DYNAMICS MATRIX
-COMMON /kfilf/frac0
-COMMON /kfilk/kch
+!
 !----------------------------------------------------------------------
 !--------------------------- DECLARATIONS -----------------------------
 !----------------------------------------------------------------------
@@ -276,7 +274,7 @@ END IF
 !     *** AFFINE***
 IF (mm > zero) THEN
   CALL affclnetfic_discrete(snetficaf,cnetficaf,distgr,filprops,  &
-      affprops,efi,noel,det,factor,ndi)
+      affprops,efi,noel,det,factor,prefdir,ndi)
 END IF
 
 !      PKNETFIC=PKNETFICNAF+PKNETFICAF

@@ -4,7 +4,7 @@ module global
 !
 INTEGER NELEM, NSDV
 PARAMETER (NELEM=1)
-PARAMETER (NSDV=2)
+PARAMETER (NSDV=4)
 DOUBLE PRECISION  ONE, TWO, THREE, FOUR, SIX, ZERO
 PARAMETER (ZERO=0.D0, ONE=1.0D0,TWO=2.0D0)
 PARAMETER (THREE=3.0D0,FOUR=4.0D0,SIX=6.0D0)
@@ -688,7 +688,7 @@ RETURN
 
 END SUBROUTINE tensorprod2
 SUBROUTINE manisomat_discrete(w,pkfic,cmfic,f,props,  &
-        efi,noel,npt,kinc,det,factor,prefdir,ndi)
+        efi,noel,npt,kinc,det,factor,prefdir,ang_pref,pulled,ndi)
 !
 !>    AFFINE NETWORK: 'FICTICIOUS' CAUCHY STRESS AND ELASTICITY TENSOR
 !> DISCRETE ANGULAR INTEGRATION SCHEME (icosahedron)
@@ -703,7 +703,8 @@ DOUBLE PRECISION, INTENT(IN)             :: props(8)
 DOUBLE PRECISION, INTENT(IN OUT)         :: efi
 INTEGER, INTENT(IN OUT)                  :: noel,npt,kinc
 DOUBLE PRECISION, INTENT(IN OUT)         :: det
-
+DOUBLE PRECISION, INTENT(OUT)            :: pulled
+!
 INTEGER :: j1,k1,l1,m1
 DOUBLE PRECISION :: sfibfic(ndi,ndi), cfibfic(ndi,ndi,ndi,ndi)
 DOUBLE PRECISION :: mfi(ndi),mf0i(ndi)
@@ -712,6 +713,7 @@ DOUBLE PRECISION :: bdisp,ang,w,wi,rho,aux2,lambdain,lf
 DOUBLE PRECISION :: aic,ais
 DOUBLE PRECISION :: avga,maxa,suma,dirmax(ndi),kk1,kk2,ei
 DOUBLE PRECISION :: prefdir(nelem,4)
+DOUBLE PRECISION :: pd(3),lambda_pref,prefdir0(3),ang_pref
 
 ! INTEGRATION SCHEME
   integer ( kind = 4 ) node_num
@@ -784,6 +786,20 @@ lf       = props(7)
   maxa=zero
   suma=zero
   dirmax=zero
+
+  pulled = zero
+  
+  !preferred direction measures (macroscale measures)
+  prefdir0=prefdir(noel,2:4)
+  !calculate preferred direction in the deformed configuration
+  CALL deffib(lambda_pref,pd,prefdir0,f,ndi)
+  !update preferential direction - deformed configuration
+  pd=pd/dsqrt(dot_product(pd,pd))
+  !rotation of the preferred direction
+  prefdir0=prefdir0/dsqrt(dot_product(prefdir0,prefdir0))
+  ang_pref=dot_product(pd,prefdir0)
+  ang_pref=acos(ang_pref)
+
   
 !  Pick a face of the icosahedron, and identify its vertices as A, B, C.
 !
@@ -866,7 +882,7 @@ lf       = props(7)
          END DO
 !
         w=w+rho*ai*wi
-        aa=aa+1
+        aa=aa+rho*ai
        endif
         rr = rr +  rho*ai
         node_num = node_num + 1  
@@ -944,6 +960,7 @@ lf       = props(7)
 
    end do
 ! !
+   pulled=aa/rr
 !  Discard allocated memory.
 !
   deallocate ( edge_point )
@@ -1399,6 +1416,8 @@ DOUBLE PRECISION :: cjr(ndi,ndi,ndi,ndi)
 !     CAUCHY STRESS AND ELASTICITY TENSOR
 DOUBLE PRECISION :: sigma(ndi,ndi),ddsigdde(ndi,ndi,ndi,ndi),  &
     ddpkdde(ndi,ndi,ndi,ndi)
+!     MICROSTRUCTURE STATE 
+DOUBLE PRECISION :: frac_pld,prefang
 !     TESTING/DEBUG VARS
 DOUBLE PRECISION :: stest(ndi,ndi), ctest(ndi,ndi,ndi,ndi)
 !----------------------------------------------------------------------
@@ -1547,11 +1566,11 @@ CALL erfi(efi,bdisp,nterm)
 !
 ! material configuration
 CALL manisomat_discrete(sseaniso,pkmatficaniso,cmanisomatfic,distgr,props, &
-    efi,noel, npt, kinc, det, factor, prefdir, ndi )
+    efi,noel, npt, kinc, det, factor, prefdir, prefang, frac_pld, ndi )
 !
 ! spatial configuration
 CALL anisomat_discrete(sseaniso,sanisomatfic,canisomatfic,distgr,props, &
-    efi,noel, npt, kinc, det, factor, prefdir, ndi )
+    efi,noel, npt, kinc, det, factor, prefdir, prefang, frac_pld, ndi )
 !CALL cmatanisomatfic(cmanisomatfic,m0,daniso,unit2,det,ndi)
 !CALL push4(canisomatfic,cmanisomatfic,distgr,det,ndi)!
 !----------------------------------------------------------------------
@@ -1629,12 +1648,12 @@ ddsigdde=cvol+ciso+cjr
 
 
 !lets test pk2...
-call push4(ctest,ddpkdde,distgr,det,ndi)
-write(*,*) ctest-ciso-cvol
-write(*,*) '*********************************************'
-call push2(stest,pkiso,distgr,det,ndi)
-write(*,*) stest-siso
-write(*,*) '*********************************************'
+! call push4(ctest,ddpkdde,distgr,det,ndi)
+! write(*,*) ctest-ciso-cvol
+! write(*,*) '*********************************************'
+! call push2(stest,pkiso,distgr,det,ndi)
+! write(*,*) stest-siso
+! write(*,*) '*********************************************'
 !----------------------------------------------------------------------
 !------------------------- INDEX ALLOCATION ---------------------------
 !----------------------------------------------------------------------
@@ -1646,7 +1665,7 @@ CALL indexx(stress,ddsdde,sigma,ddsigdde,ntens,ndi)
 !----------------------------------------------------------------------
 !     DO K1 = 1, NTENS
 !      STATEV(1:27) = VISCOUS TENSORS
-CALL sdvwrite(det,lambda,statev)
+CALL sdvwrite(det,lambda,frac_pld,prefang,statev)
 !     END DO
 !----------------------------------------------------------------------
 RETURN
@@ -3310,19 +3329,22 @@ lambda=dsqrt(lambda)
 
 RETURN
 END SUBROUTINE deffib
-SUBROUTINE sdvwrite(det,lambda,statev)
+SUBROUTINE sdvwrite(det,lambda,frac_pld,prefang,statev)
 !>    VISCOUS DISSIPATION: WRITE STATE VARS
 use global
 implicit none
 
 INTEGER :: pos1
 !
-DOUBLE PRECISION, INTENT(IN)             :: det,lambda
+DOUBLE PRECISION, INTENT(IN)             :: det,lambda,frac_pld,prefang
 DOUBLE PRECISION, INTENT(OUT)            :: statev(nsdv)
 !
 pos1=0
 statev(pos1+1)=det
 statev(pos1+2)=lambda
+statev(pos1+3)=frac_pld
+statev(pos1+4)=prefang
+
 
 RETURN
 
@@ -3371,7 +3393,7 @@ END DO
 RETURN
 END SUBROUTINE chemicalstat
 SUBROUTINE anisomat_discrete(w,sfic,cfic,f,props,  &
-        efi,noel,npt,kinc,det,factor,prefdir,ndi)
+        efi,noel,npt,kinc,det,factor,prefdir, ang_pref,pulled,ndi)
 
 !>    AFFINE NETWORK: 'FICTICIOUS' CAUCHY STRESS AND ELASTICITY TENSOR
 !> DISCRETE ANGULAR INTEGRATION SCHEME (icosahedron)
@@ -3386,7 +3408,8 @@ DOUBLE PRECISION, INTENT(IN)             :: props(8)
 DOUBLE PRECISION, INTENT(IN OUT)         :: efi
 INTEGER, INTENT(IN OUT)                  :: noel,npt,kinc
 DOUBLE PRECISION, INTENT(IN OUT)         :: det
-
+!variables for microstructure state
+DOUBLE PRECISION, INTENT(OUT)            :: pulled
 INTEGER :: j1,k1,l1,m1
 DOUBLE PRECISION :: sfibfic(ndi,ndi), cfibfic(ndi,ndi,ndi,ndi)
 DOUBLE PRECISION :: mfi(ndi),mf0i(ndi)
@@ -3395,6 +3418,8 @@ DOUBLE PRECISION :: bdisp,ang,w,wi,rho,aux2,lambdain,lf
 DOUBLE PRECISION :: aic,ais
 DOUBLE PRECISION :: avga,maxa,suma,dirmax(ndi),kk1,kk2,ei
 DOUBLE PRECISION :: prefdir(nelem,4)
+DOUBLE PRECISION :: pd(3),lambda_pref,prefdir0(3),ang_pref
+
 
 ! INTEGRATION SCHEME
   integer ( kind = 4 ) node_num
@@ -3467,7 +3492,21 @@ lf       = props(7)
   maxa=zero
   suma=zero
   dirmax=zero
+
+  pulled = zero
   
+  !preferred direction measures (macroscale measures)
+  prefdir0=prefdir(noel,2:4)
+  !calculate preferred direction in the deformed configuration
+  CALL deffib(lambda_pref,pd,prefdir0,f,ndi)
+  !update preferential direction - deformed configuration
+  pd=pd/dsqrt(dot_product(pd,pd))
+  !rotation of the preferred direction
+  prefdir0=prefdir0/dsqrt(dot_product(prefdir0,prefdir0))
+  ang_pref=dot_product(pd,prefdir0)
+  ang_pref=acos(ang_pref)
+
+  !prefdir1(noel,2:4)=pd
 !  Pick a face of the icosahedron, and identify its vertices as A, B, C.
 !
   do face = 1, face_num
@@ -3506,7 +3545,8 @@ lf       = props(7)
         mf0i=node_xyz
         CALL deffib(lambdai,mfi,mf0i,f,ndi)
   
-        CALL bangle(ang,f,mfi,noel,prefdir,ndi)
+        CALL bangle(ang,f,mfi,noel,pd,ndi) 
+
         CALL density(rho,ang,bdisp,efi)
         !scaled weight
         ai = ai/(two*pi)
@@ -3517,6 +3557,7 @@ lf       = props(7)
         ei = lambdai-one
          !calculate fiber sef and sef derivatives values
         if (ei .ge. zero) then
+
           !fiber sef
           wi   = (kk1/(two*kk2))*(dexp(kk2*ei*ei)-one)
           ! fiber derivatives
@@ -3549,7 +3590,7 @@ lf       = props(7)
          END DO
 !
         w=w+rho*ai*wi
-        aa=aa+1
+        aa=aa+rho*ai
        endif
         rr = rr +  rho*ai
         node_num = node_num + 1  
@@ -3557,6 +3598,9 @@ lf       = props(7)
         !write(*,*) node_num,ang, rho
       end do
     end do
+
+    !pulled=pulled*(node_num**(-one))
+
 ! !
 ! !  The other subtriangles have the opposite direction from the face.
 ! !  Generate each in turn, by determining the barycentric coordinates
@@ -3626,6 +3670,8 @@ lf       = props(7)
 !     end do
 
    end do
+   pulled=aa/rr
+  ! write(*,*) ang_pref*180.d0/pi,pulled
 ! !
 !  Discard allocated memory.
 !
@@ -3637,7 +3683,7 @@ lf       = props(7)
 !write(*,*) w,rr,area_total
 RETURN
 END SUBROUTINE anisomat_discrete
-SUBROUTINE bangle(ang,f,mf,noel,prefdir,ndi)
+SUBROUTINE bangle(ang,f,mf,noel,pdir,ndi)
 
 !>    ANGLE BETWEEN FILAMENT AND PREFERED DIRECTION
 
@@ -3648,28 +3694,28 @@ INTEGER, INTENT(IN)                      :: ndi
 DOUBLE PRECISION, INTENT(OUT)            :: ang
 DOUBLE PRECISION, INTENT(IN OUT)         :: f(ndi,ndi)
 DOUBLE PRECISION, INTENT(IN)             :: mf(ndi)
+DOUBLE PRECISION, INTENT(IN OUT)         :: pdir(ndi)
 INTEGER, INTENT(IN OUT)                  :: noel
 !
-DOUBLE PRECISION :: prefdir(nelem,4)
 !
 INTEGER :: inoel,i,j
-DOUBLE PRECISION :: dnorm,pdir(ndi), mfa(ndi),aux
+DOUBLE PRECISION :: dnorm, mfa(ndi),aux
 DOUBLE PRECISION :: c(ndi,ndi),egvc(ndi,ndi),egvl(ndi)
 !
 inoel=0
 i=0
-DO i=1,nelem
+!DO i=1,nelem
 !               ELEMENT IDENTIFICATION
-  IF(noel == INT(prefdir(i,1))) THEN
-    inoel=i
-  END IF
-END DO
+!  IF(noel == INT(prefdir(i,1))) THEN
+!    inoel=i
+!  END IF
+!END DO
 !
-DO i=1,ndi
-  j=i+1
+!DO i=1,ndi
+!  j=i+1
 !       PREFERED ORIENTATION  ORIENTATION NORMALIZED
-  pdir(i)=prefdir(inoel,j)
-END DO
+!  pdir(i)=prefdir(inoel,j)
+!END DO
 !        ALTERNATIVE APPROACH: BUNDLES FOLLOW PRINCIPAL DIRECTIONS
 !c=matmul(transpose(f),f)
 !CALL spectral(c,egvl,egvc)

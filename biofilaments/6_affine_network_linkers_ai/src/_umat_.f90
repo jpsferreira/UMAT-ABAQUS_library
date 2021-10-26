@@ -60,6 +60,9 @@ DOUBLE PRECISION, INTENT(IN OUT)         :: drot(3,3)
 DOUBLE PRECISION, INTENT(IN OUT)         :: dfgrd0(3,3)
 DOUBLE PRECISION, INTENT(IN OUT)         :: dfgrd1(3,3)
 
+COMMON /kfilp/prefdir
+DOUBLE PRECISION :: prefdir(nelem,4)
+
 !
 !     FLAGS
 !      INTEGER FLAG1
@@ -95,9 +98,7 @@ DOUBLE PRECISION :: cmnetficaf(ndi,ndi,ndi,ndi), cmnetficnaf(ndi,ndi,ndi,ndi)
 DOUBLE PRECISION :: cnetficaf(ndi,ndi,ndi,ndi), cnetficnaf(ndi,ndi,ndi,ndi)
 DOUBLE PRECISION :: efi
 INTEGER :: nterm,factor
-!     CONTRACTILE FILAMENT
-DOUBLE PRECISION :: frac0(4),frac(4),kch(7), prefdir(nelem,4)
-
+!
 !     JAUMMAN RATE CONTRIBUTION (REQUIRED FOR ABAQUS UMAT)
 DOUBLE PRECISION :: cjr(ndi,ndi,ndi,ndi)
 !     CAUCHY STRESS AND ELASTICITY TENSOR
@@ -259,9 +260,8 @@ CALL erfi(efi,bb,nterm)
 !------------ AFFINE NETWORK --------------
 IF (nn > zero) THEN
   CALL affclnetfic_discrete(snetficaf,cnetficaf,distgr,filprops,  &
-      affprops,efi,noel,det,factor,ndi)
+      affprops,efi,noel,det,factor,prefdir,ndi)
 END IF
-
 !      PKNETFIC=PKNETFICNAF+PKNETFICAF
 snetfic=snetficnaf+snetficaf
 !      CMNETFIC=CMNETFICNAF+CMNETFICAF

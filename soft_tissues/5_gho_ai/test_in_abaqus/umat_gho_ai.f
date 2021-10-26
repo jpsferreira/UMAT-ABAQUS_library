@@ -188,6 +188,31 @@ statev(9+pos)=hv(3,3)
 RETURN
 
 END SUBROUTINE hvwrite
+SUBROUTINE contraction22(aux,lt,rt,ndi)
+!>       DOUBLE CONTRACTION BETWEEN 2nd ORDER AND 2ND ORDER  TENSOR
+!>      INPUT:
+!>       LT - RIGHT 2ND ORDER TENSOR
+!>       RT - LEFT  2nd ODER TENSOR
+!>      OUTPUT:
+!>       aux - DOUBLE CONTRACTED TENSOR (scalar)
+use global
+IMPLICIT NONE
+
+INTEGER, INTENT(IN)                      :: ndi
+DOUBLE PRECISION, INTENT(IN)             :: lt(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN)             :: rt(ndi,ndi)
+DOUBLE PRECISION, INTENT(OUT)            :: aux
+INTEGER :: i1,j1
+
+
+    aux=zero
+    DO i1=1,ndi
+      DO j1=1,ndi
+        aux=aux+lt(i1,j1)*rt(j1,i1)
+      END DO
+    END DO
+RETURN
+END SUBROUTINE contraction22
 SUBROUTINE pk2anisomatfic(afic,daniso,cbar,inv4,st0,ndi)
 !
 use global
@@ -578,9 +603,6 @@ inv2=(one/two)*(inv1*inv1-inv1aa)
 RETURN
 END SUBROUTINE invariants
 SUBROUTINE contraction24(s,LT,rt,ndi)
-
-
-
 !>       DOUBLE CONTRACTION BETWEEN 4TH ORDER AND 2ND ORDER  TENSOR
 !>      INPUT:
 !>       LT - RIGHT 2ND ORDER TENSOR
@@ -1243,7 +1265,7 @@ CALL csisomatfic(cisomatfic,cmisomatfic,distgr,det,ndi)
 CALL erfi(efi,bdisp,nterm)
 !
 CALL anisomat_discrete(sseaniso,sanisomatfic,canisomatfic,distgr,props, &
-    efi,noel, det, factor, ndi )
+    efi,noel, det, factor, prefdir, ndi )
 
 
 !CALL cmatanisomatfic(cmanisomatfic,m0,daniso,unit2,det,ndi)
@@ -3061,7 +3083,7 @@ END DO
 RETURN
 END SUBROUTINE chemicalstat
 SUBROUTINE anisomat_discrete(w,sfic,cfic,f,props,  &
-        efi,noel,det,factor,ndi)
+        efi,noel,det,factor,prefdir,ndi)
 
 !>    AFFINE NETWORK: 'FICTICIOUS' CAUCHY STRESS AND ELASTICITY TENSOR
 !> DISCRETE ANGULAR INTEGRATION SCHEME (icosahedron)
@@ -3083,6 +3105,8 @@ DOUBLE PRECISION :: mfi(ndi),mf0i(ndi)
 DOUBLE PRECISION :: aux,lambdai,dwi,ddwi
 DOUBLE PRECISION :: bdisp,ang,w,wi,rho,aux2
 DOUBLE PRECISION :: avga,maxa,suma,dirmax(ndi),kk1,kk2,ei
+DOUBLE PRECISION :: prefdir(nelem,4)
+DOUBLE PRECISION :: pd(3),lambda_pref,prefdir0(3),ang_pref
 
 ! INTEGRATION SCHEME
   integer ( kind = 4 ) node_num
@@ -3156,6 +3180,17 @@ bdisp    = props(6)
   suma=zero
   dirmax=zero
   
+    !preferred direction measures (macroscale measures)
+  prefdir0=prefdir(noel,2:4)
+  !calculate preferred direction in the deformed configuration
+  CALL deffib(lambda_pref,pd,prefdir0,f,ndi)
+  !update preferential direction - deformed configuration
+  pd=pd/dsqrt(dot_product(pd,pd))
+  !rotation of the preferred direction
+  !prefdir0=prefdir0/dsqrt(dot_product(prefdir0,prefdir0))
+  !ang_pref=dot_product(pd,prefdir0)
+  !ang_pref=acos(ang_pref)
+
 !  Pick a face of the icosahedron, and identify its vertices as A, B, C.
 !
   do face = 1, face_num
@@ -3194,7 +3229,7 @@ bdisp    = props(6)
         mf0i=node_xyz
         CALL deffib(lambdai,mfi,mf0i,f,ndi)
   
-        CALL bangle(ang,f,mfi,noel,ndi)
+        CALL bangle(ang,f,mfi,noel,pd,ndi)
         CALL density(rho,ang,bdisp,efi)
         !scaled weight
         ai = ai/(two*pi)
@@ -3314,9 +3349,7 @@ bdisp    = props(6)
 !write(*,*) w,rr,area_total
 RETURN
 END SUBROUTINE anisomat_discrete
-SUBROUTINE bangle(ang,f,mf,noel,ndi)
-
-
+SUBROUTINE bangle(ang,f,mf,noel,pdir,ndi)
 
 !>    ANGLE BETWEEN FILAMENT AND PREFERED DIRECTION
 
@@ -3327,31 +3360,28 @@ INTEGER, INTENT(IN)                      :: ndi
 DOUBLE PRECISION, INTENT(OUT)            :: ang
 DOUBLE PRECISION, INTENT(IN OUT)         :: f(ndi,ndi)
 DOUBLE PRECISION, INTENT(IN)             :: mf(ndi)
+DOUBLE PRECISION, INTENT(IN OUT)         :: pdir(ndi)
 INTEGER, INTENT(IN OUT)                  :: noel
-
-
-
-COMMON /kfilp/prefdir
-DOUBLE PRECISION :: prefdir(nelem,4)
-
+!
+!
 INTEGER :: inoel,i,j
-DOUBLE PRECISION :: dnorm,pdir(ndi), mfa(ndi),aux
+DOUBLE PRECISION :: dnorm, mfa(ndi),aux
 DOUBLE PRECISION :: c(ndi,ndi),egvc(ndi,ndi),egvl(ndi)
-
+!
 inoel=0
 i=0
-DO i=1,nelem
+!DO i=1,nelem
 !               ELEMENT IDENTIFICATION
-  IF(noel == INT(prefdir(i,1))) THEN
-    inoel=i
-  END IF
-END DO
-
-DO i=1,ndi
-  j=i+1
+!  IF(noel == INT(prefdir(i,1))) THEN
+!    inoel=i
+!  END IF
+!END DO
+!
+!DO i=1,ndi
+!  j=i+1
 !       PREFERED ORIENTATION  ORIENTATION NORMALIZED
-  pdir(i)=prefdir(inoel,j)
-END DO
+!  pdir(i)=prefdir(inoel,j)
+!END DO
 !        ALTERNATIVE APPROACH: BUNDLES FOLLOW PRINCIPAL DIRECTIONS
 !c=matmul(transpose(f),f)
 !CALL spectral(c,egvl,egvc)
@@ -3364,8 +3394,7 @@ END DO
 !     PREFERED ORIENTATION
 dnorm=dot_product(pdir,pdir)
 dnorm=DSQRT(dnorm)
-
-!       PREFERED ORIENTATION  NORMALIZED
+!     PREFERED ORIENTATION  NORMALIZED
 pdir=pdir/dnorm
 
 !       FILAMENT ORIENTATION
@@ -4048,9 +4077,7 @@ CALL contraction44(cisoaux,cisoaux1,plt,ndi)
 trfic=zero
 aux=det**(-two/three)
 aux1=aux**two
-DO i1=1,ndi
-  trfic=trfic+aux*pkfic(i1,i1)
-END DO
+CALL contraction22(trfic,aux*pkfic,c,ndi)
 
 DO i1=1,ndi
   DO j1=1,ndi
