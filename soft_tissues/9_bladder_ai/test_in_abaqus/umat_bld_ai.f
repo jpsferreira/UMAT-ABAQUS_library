@@ -820,7 +820,7 @@ lf       = props(7)
         mf0i=node_xyz
         CALL deffib(lambdai,mfi,mf0i,f,ndi)
   
-        CALL bangle(ang,f,mfi,noel,prefdir,ndi)
+        CALL bangle(ang,f,mfi,noel,pd,ndi)
         CALL density(rho,ang,bdisp,efi)
         !scaled weight
         ai = ai/(two*pi)
@@ -1502,7 +1502,7 @@ CALL matinv3d(distgr,distgrinv,ndi)
 CALL deformation(dfgrd1,c,b,ndi)
 CALL deformation(distgr,cbar,bbar,ndi)
 !     FIBER UNIT VECTOR AND STRUCTURAL TENSOR
-CALL fibdir(prefdir,m0,mm,nelem,noel,ndi,vorif,vd,distgr,dfgrd1)
+CALL fibdir(prefdir,m0,mm,noel,ndi,vorif,vd,distgr,dfgrd1)
 
 !     INVARIANTS OF DEVIATORIC DEFORMATION TENSORS
 CALL invariants(cbar,cbari1,cbari2,ndi)
@@ -3207,13 +3207,12 @@ END DO
 
 RETURN
 END SUBROUTINE visco
-SUBROUTINE fibdir(fib,st0,st,NE,noel,ndi,vorif,vd,distgr,dfgrd1)
+SUBROUTINE fibdir(fib,st0,st,noel,ndi,vorif,vd,distgr,dfgrd1)
 
 
 DOUBLE PRECISION, INTENT(IN)             :: fib(NE,4)
 DOUBLE PRECISION, INTENT(OUT)            :: st0(3,3)
 DOUBLE PRECISION, INTENT(OUT)            :: st(3,3)
-INTEGER, INTENT(IN)                      :: NE
 INTEGER, INTENT(IN OUT)                  :: noel
 INTEGER, INTENT(IN)                      :: ndi
 DOUBLE PRECISION, INTENT(OUT)            :: vorif(3)
@@ -3229,7 +3228,7 @@ DOUBLE PRECISION :: sum1, dnorm
 
 inoel=0
 i=0
-DO i=1,NE
+DO i=1,nelem
 !               ELEMENT IDENTIFICATION
   IF(noel == INT(fib(i,1))) THEN
     inoel=i

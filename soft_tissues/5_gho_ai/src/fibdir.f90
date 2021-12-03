@@ -1,10 +1,9 @@
-SUBROUTINE fibdir(fib,st0,st,NE,noel,ndi,vorif,vd,distgr,dfgrd1)
+SUBROUTINE fibdir(fib,st0,st,noel,ndi,vorif,vd,distgr,dfgrd1)
 
 
 DOUBLE PRECISION, INTENT(IN)             :: fib(NE,4)
 DOUBLE PRECISION, INTENT(OUT)            :: st0(3,3)
 DOUBLE PRECISION, INTENT(OUT)            :: st(3,3)
-INTEGER, INTENT(IN)                      :: NE
 INTEGER, INTENT(IN OUT)                  :: noel
 INTEGER, INTENT(IN)                      :: ndi
 DOUBLE PRECISION, INTENT(OUT)            :: vorif(3)
@@ -20,7 +19,7 @@ DOUBLE PRECISION :: sum1, dnorm
 
 inoel=0
 i=0
-DO i=1,NE
+DO i=1,nelem
 !               ELEMENT IDENTIFICATION
   IF(noel == INT(fib(i,1))) THEN
     inoel=i
