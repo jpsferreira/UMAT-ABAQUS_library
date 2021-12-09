@@ -48,7 +48,7 @@ PROPS(2)=0.82d0
 ! C01
 PROPS(3)=0.00d0
 !k1
-PROPS(4)=5.63d0
+PROPS(4)=.63d0
 !k2
 PROPS(5)=1.425d0
 !bdisp

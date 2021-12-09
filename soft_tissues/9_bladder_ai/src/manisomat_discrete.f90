@@ -164,15 +164,18 @@ lf       = props(7)
           !fiber sef
           wi   = (kk1/(two*kk2))*(dexp(kk2*ei*ei)-one)
           ! fiber derivatives
-          !gho
-          !dwi  = kk1*ei*dexp(kk2*ei*ei)
-          !ddwi = kk1*dexp(kk2*ei*ei)*(two*kk2*ei*ei+one)
+        !fiber sef
+          wi   = (kk1/(two*kk2))*(dexp(kk2*ei*ei)-one)
+        ! fiber derivatives
+          dwi  = kk1*ei*dexp(kk2*ei*ei)*((two*lambdai)**(-one))
+          ddwi = (kk1/four)*lambdai**(-three/two)*dexp(kk2*ei*ei) & 
+              & *(two*kk2*(lambdai**(-three/two)-two*lambdai*lambdai+lambdai) + one)
           !bladder model
-          dwi=(kk1/(two*sqrt(lambdai)))*((sqrt(lambdai)-one)*(dexp(kk2*(sqrt(lambdai)-one)*(sqrt(lambdai)-one))))
-          ddwi1=(kk1*kk2*(sqrt(lambdai)-one)*(sqrt(lambdai)-one)*(dexp(kk2*(sqrt(lambdai)-one)*(sqrt(lambdai)-one))))/(two*lambdai)
-          ddwi2=(kk1*(dexp(kk2*(sqrt(lambdai)-one)*(sqrt(lambdai)-one))))/(four*lambdai)
-          ddwi3=(-kk1*(sqrt(lambdai)-one)*(dexp(kk2*(sqrt(lambdai)-one)*(sqrt(lambdai)-one))))/(four*(lambdai**(three/two)))
-          ddwi=ddwi1+ddwi2+ddwi3
+          ! dwi=(kk1/(two*sqrt(lambdai)))*((sqrt(lambdai)-one)*(dexp(kk2*(sqrt(lambdai)-one)*(sqrt(lambdai)-one))))
+          ! ddwi1=(kk1*kk2*(sqrt(lambdai)-one)*(sqrt(lambdai)-one)*(dexp(kk2*(sqrt(lambdai)-one)*(sqrt(lambdai)-one))))/(two*lambdai)
+          ! ddwi2=(kk1*(dexp(kk2*(sqrt(lambdai)-one)*(sqrt(lambdai)-one))))/(four*lambdai)
+          ! ddwi3=(-kk1*(sqrt(lambdai)-one)*(dexp(kk2*(sqrt(lambdai)-one)*(sqrt(lambdai)-one))))/(four*(lambdai**(three/two)))
+          ! ddwi=ddwi1+ddwi2+ddwi3
           !update weight
           ais=ai*lambdai**(-one)*lambdai**(-two)
           !stress and material  tangent
@@ -234,15 +237,17 @@ lf       = props(7)
 !         ai = ai/(four*pi)
 !         !rho=rho/(four*pi)
 !         !strain-like of fiber i
-!         lambdai=lambdai*lambdai
+!         lambdai=lambdai/lf
 !         ei = lambdai-one
 !          !calculate fiber sef and sef derivatives values
 !         if (ei .ge. zero) then
 !           !fiber sef
-!           wi   = (kk1/(two*kk2))*(dexp(kk2*ei*ei)-one)
-!           ! fiber derivatives
-!           dwi  = kk1*ei*dexp(kk2*ei*ei)
-!           ddwi = kk1*dexp(kk2*ei*ei)*(two*kk2*ei*ei+one)
+!           !fiber sef
+!          wi   = (kk1/(two*kk2))*(dexp(kk2*ei*ei)-one)
+          ! fiber derivatives
+!          dwi  = kk1*ei*dexp(kk2*ei*ei)*((two*lambdai)**(-one))
+!          ddwi = (kk1/four)*lambdai**(-three/two)*dexp(kk2*ei*ei) & 
+!              & *(two*kk2*(lambdai**(-three/two)-two*lambdai*lambdai+lambdai) + one)
 !           !stress and material  tangent 
 !         CALL sigfibfic(sfibfic,rho,dwi,mfi,ai,ndi)
 !         ! 
