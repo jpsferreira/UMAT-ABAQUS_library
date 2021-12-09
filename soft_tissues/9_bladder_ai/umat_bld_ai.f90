@@ -850,27 +850,21 @@ lf       = props(7)
         ei = lambdai-one
          !calculate fiber sef and sef derivatives values
         if (ei .ge. zero) then
-          !fiber sef
+          
+         
           wi   = (kk1/(two*kk2))*(dexp(kk2*ei*ei)-one)
           ! fiber derivatives
-        !fiber sef
-          wi   = (kk1/(two*kk2))*(dexp(kk2*ei*ei)-one)
-        ! fiber derivatives
-          dwi  = kk1*ei*dexp(kk2*ei*ei)*((two*lambdai)**(-one))
-          ddwi = (kk1/four)*lambdai**(-three/two)*dexp(kk2*ei*ei) & 
-              & *(two*kk2*(lambdai**(-three/two)-two*lambdai*lambdai+lambdai) + one)
-          !bladder model
-          ! dwi=(kk1/(two*sqrt(lambdai)))*((sqrt(lambdai)-one)*(dexp(kk2*(sqrt(lambdai)-one)*(sqrt(lambdai)-one))))
-          ! ddwi1=(kk1*kk2*(sqrt(lambdai)-one)*(sqrt(lambdai)-one)*(dexp(kk2*(sqrt(lambdai)-one)*(sqrt(lambdai)-one))))/(two*lambdai)
-          ! ddwi2=(kk1*(dexp(kk2*(sqrt(lambdai)-one)*(sqrt(lambdai)-one))))/(four*lambdai)
-          ! ddwi3=(-kk1*(sqrt(lambdai)-one)*(dexp(kk2*(sqrt(lambdai)-one)*(sqrt(lambdai)-one))))/(four*(lambdai**(three/two)))
-          ! ddwi=ddwi1+ddwi2+ddwi3
+          dwi  = kk1*ei*dexp(kk2*ei*ei)
+          ddwi = kk1*dexp(kk2*ei*ei)*(two*kk2*ei*ei+one)
+          
+                    !fiber sef
+
           !update weight
-          ais=ai*lambdai**(-one)*lambdai**(-two)
+          ais=ai*half*lambdai**(-one)*lf**(-two)
           !stress and material  tangent
         CALL sigfibfic(sfibfic,rho,dwi,mf0i,ais,ndi)
         ! 
-          aic=ais*lambdai**(-one)*lambdai**(-two)
+          aic=ais*half*lambdai**(-one)*lf**(-two)
         CALL csfibfic(cfibfic,rho,dwi,ddwi,mf0i,aic,ndi)
 !
         DO j1=1,ndi
@@ -938,9 +932,11 @@ lf       = props(7)
 !          ddwi = (kk1/four)*lambdai**(-three/two)*dexp(kk2*ei*ei) & 
 !              & *(two*kk2*(lambdai**(-three/two)-two*lambdai*lambdai+lambdai) + one)
 !           !stress and material  tangent 
-!         CALL sigfibfic(sfibfic,rho,dwi,mfi,ai,ndi)
+!          ais=ai*(lf**(-two))
+!         CALL sigfibfic(sfibfic,rho,dwi,mfi,ais,ndi)
 !         ! 
-!         CALL csfibfic(cfibfic,rho,dwi,ddwi,mfi,ai,ndi)
+!          aic=aia*(lf**(-two))
+!         CALL csfibfic(cfibfic,rho,dwi,ddwi,mfi,aic,ndi)
 !         !
 !         DO j1=1,ndi
 !            DO k1=1,ndi
@@ -3562,30 +3558,21 @@ lf       = props(7)
          !calculate fiber sef and sef derivatives values
         if (ei .ge. zero) then
 
-          !fiber sef
+         
           wi   = (kk1/(two*kk2))*(dexp(kk2*ei*ei)-one)
           ! fiber derivatives
-          dwi  = kk1*ei*dexp(kk2*ei*ei)*((two*lambdai)**(-one))
-          ddwi = (kk1/four)*lambdai**(-three/two)*dexp(kk2*ei*ei) & 
-              & *(two*kk2*(lambdai**(-three/two)-two*lambdai*lambdai+lambdai) + one)
-          !fiber sef
-          !wi   = (kk1/(two*kk2))*(dexp(kk2*ei*ei)-one)
-          ! fiber derivatives
-          !gho
-          !dwi  = kk1*ei*dexp(kk2*ei*ei)
-          !ddwi = kk1*dexp(kk2*ei*ei)*(two*kk2*ei*ei+one)
-          !bladder model
-          ! dwi=(kk1/(two*sqrt(lambdai)))*((sqrt(lambdai)-one)*(dexp(kk2*(sqrt(lambdai)-one)*(sqrt(lambdai)-one))))
-          ! ddwi1=(kk1*kk2*(sqrt(lambdai)-one)*(sqrt(lambdai)-one)*(dexp(kk2*(sqrt(lambdai)-one)*(sqrt(lambdai)-one))))/(two*lambdai)
-          ! ddwi2=(kk1*(dexp(kk2*(sqrt(lambdai)-one)*(sqrt(lambdai)-one))))/(four*lambdai)
-          ! ddwi3=(-kk1*(sqrt(lambdai)-one)*(dexp(kk2*(sqrt(lambdai)-one)*(sqrt(lambdai)-one))))/(four*(lambdai**(three/two)))
-          ! ddwi=ddwi1+ddwi2+ddwi3
+          dwi  = kk1*ei*dexp(kk2*ei*ei)
+          ddwi = kk1*dexp(kk2*ei*ei)*(two*kk2*ei*ei+one)
+          
+                    !fiber sef
+          
           !update weight
-          ais=ai*lambdai**(-one)*lambdai**(-two)
+          ais=ai*half*lambdai**(-one)*lf**(-two)
           !stress and material  tangent
         CALL sigfibfic(sfibfic,rho,dwi,mfi,ais,ndi)
         ! 
-          aic=ais*lambdai**(-one)*lambdai**(-two)
+          aic=ais*half*lambdai**(-one)*lf**(-two)
+          write(*,*) ddwi*aic
         CALL csfibfic(cfibfic,rho,dwi,ddwi,mfi,aic,ndi)
 !
         DO j1=1,ndi
@@ -3655,10 +3642,12 @@ lf       = props(7)
 !          dwi  = kk1*ei*dexp(kk2*ei*ei)*((two*lambdai)**(-one))
 !          ddwi = (kk1/four)*lambdai**(-three/two)*dexp(kk2*ei*ei) & 
 !              & *(two*kk2*(lambdai**(-three/two)-two*lambdai*lambdai+lambdai) + one)
+!            ais=ai*(lf**(-two))
 !           !stress and material  tangent 
-!         CALL sigfibfic(sfibfic,rho,dwi,mfi,ai,ndi)
+!         CALL sigfibfic(sfibfic,rho,dwi,mfi,ais,ndi)
 !         ! 
-!         CALL csfibfic(cfibfic,rho,dwi,ddwi,mfi,ai,ndi)
+!            aic=ais*(lf**(-two))
+!         CALL csfibfic(cfibfic,rho,dwi,ddwi,mfi,aic,ndi)
 !         !
 !         DO j1=1,ndi
 !            DO k1=1,ndi
