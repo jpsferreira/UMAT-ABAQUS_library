@@ -15,7 +15,7 @@ test_in_abaqus: $(addsuffix _test_in_abaqus,$(DIRS))
 	cd $(@:_test=) && ./*.o
 
 %_test_in_abaqus: 
-	cd $(@:_test=)/test_in_abaqus && sh test.sh
+	cd $(@:_test=)/test_in_abaqus && abaqus job=cube*.inp user=umat*.for interactive
 
 clean:
 	for dir in $(DIRS); do \
