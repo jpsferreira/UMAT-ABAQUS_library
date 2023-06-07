@@ -1,7 +1,5 @@
 module global
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! Set the control parameters to run the material-related routines
-!
+
 INTEGER NELEM, NSDV
 PARAMETER (NELEM=1)
 PARAMETER (NSDV=4)

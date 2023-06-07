@@ -1,6 +1,6 @@
 *Solid Section, elset=main_element, material=UD
 *Material, name=UD
-*User Material, constants=5
+*User Material, constants=13
 <KBULK>,<C10>,<C01>,<K1>,<K2>,<T0M>,<V>,<TAU1>
 <TETA1>,<TAU2>,<TETA2>,<TAU3>,<TETA3>
 *DEPVAR

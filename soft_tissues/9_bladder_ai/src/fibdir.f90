@@ -1,7 +1,8 @@
 SUBROUTINE fibdir(fib,st0,st,noel,ndi,vorif,vd,distgr,dfgrd1)
 
+use global
 
-DOUBLE PRECISION, INTENT(IN)             :: fib(NE,4)
+DOUBLE PRECISION, INTENT(IN)             :: fib(nelem,4)
 DOUBLE PRECISION, INTENT(OUT)            :: st0(3,3)
 DOUBLE PRECISION, INTENT(OUT)            :: st(3,3)
 INTEGER, INTENT(IN OUT)                  :: noel
