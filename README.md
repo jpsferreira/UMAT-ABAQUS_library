@@ -13,14 +13,39 @@ This repository also has a framework to test the material response under multipl
 
 This repository is oriented for experienced researchers in biomechanics and continuum mechanics. You are highly welcome to use these open-resource codes for your non-commercial usage; please cite the below papers. Pull requests are welcome. 
 
+# Requirements
+- ABAQUS 6.14-1 or higher and Intel Fortran Compiler 2017 or higher
+- GNU Fortran Compiler 5.4.0 or higher
+- Python 3.6 or higher
+
+* Get GNU Fortran Compiler
+```bash
+apt install gcc gfortran
+```
 # Compiling
 
-Simple bash scripts at each directory are provided for building with gfortran. The code can also be compiled with the Intel Fortran Compiler (and presumably any other Fortran compiler that supports modern standards). 
+Simple bash scripts at each directory are provided for building with gfortran. The code can also be compiled with the Intel Fortran Compiler (and presumably any other Fortran compiler that supports modern standards). A Makefile is provided for compiling the code with the GNU Fortran compiler.
+
+- create UMATs (run 2x times)
+```bash
+make build
+make build
+```
+- clean UMATs
+```bash
+make clean
+```
+-  unit test UMATs
+```bash
+make test
+```
 
 # Future Releases
+- [ ] Add more material models
+- [ ] Add more examples
+- [ ] Add more unit tests
+- [ ] Add more benchmarks
 
-*Makefile
-*Benchmarking
 ### License:
   * GNU GPL 3.0.  
 

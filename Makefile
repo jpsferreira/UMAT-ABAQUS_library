@@ -1,5 +1,5 @@
-# Get all directories with a number at the beginning.
-DIRS := $(shell find . -type d -name "[0-9]*")
+# Get all directories with a number at the beginning. ignore .git
+DIRS := $(shell find . -type d -name "[0-9]*" ! -path "./.git/*")
 
 # Rules to build and test
 .PHONY: build test test_in_abaqus clean $(DIRS)

@@ -6,7 +6,7 @@ INCLUDE 'param_umat.inc'
 !C     ADD COMMON BLOCKS HERE IF NEEDED ()
 !C      COMMON /KBLOCK/KBLOCK
 
-PARAMETER(NTENS = 6, NSTATEV = NSDV, NPROPS = 10, NDI=3, NSHR=3)
+PARAMETER(NTENS = 6, NSTATEV = NSDV, NPROPS = 8, NDI=3, NSHR=3)
 PARAMETER(NOEL = 1, NPT = 8)
 !
 CHARACTER*8 CMNAME
@@ -36,6 +36,7 @@ DFGRD1(3,3)= 1.0D0/DFGRD1(1,1)
 !
 time(1)=0.d0
 time(2)=0.d0
+call UEXTERNALDB(0,0,time,0.D0,0,0)
 !
 ! MATERIAL PROPERTIES
 !
@@ -46,23 +47,19 @@ PROPS(1)=2.d0/100000.d0
 PROPS(2)=1.00d0
 ! C01
 PROPS(3)=1.00d0
+!k1
+PROPS(4)=1.00d0
+!k2
+PROPS(5)=0.1d0
+!kappa
+PROPS(6)=0.1d0
 !
-! !viscous parameters - maxwell
-! ! v - number of dashpots
- PROPS(4)=1
-! !tau1 %
- PROPS(5)=2.0d0
-! !teta1
- PROPS(6)=0.835d0
-! !tau2 %
- PROPS(7)=1.2d0
-! !teta2
- PROPS(8)=7.0d0
-! !tau3 %
- PROPS(9)=12.d0
-! !teta3
- PROPS(10)=2.0d0
-! !
+! damage parameters exponential function
+! beta
+props(7) = 0.854d0
+! phi_half
+props(8) = 0.1d0
+!
 STATEV=0.D0
 !
 erf=0.d0
