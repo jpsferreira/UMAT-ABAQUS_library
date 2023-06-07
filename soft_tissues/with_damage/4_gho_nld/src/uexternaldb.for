@@ -1,7 +1,7 @@
       SUBROUTINE UEXTERNALDB(LOP,LRESTART,TIME,DTIME,KSTEP,KINC)
 C>    READ MESH DATA
-      INCLUDE 'ABA_PARAM.INC'
-      INCLUDE 'PARAM_UMAT.INC'
+      INCLUDE 'aba_param.inc'
+      INCLUDE 'param_umat.inc'
       COMMON /KPASSAGE/CMNV
 C
 C     UEXTERNAL just called once; work in parallel computing
@@ -22,7 +22,7 @@ C     LOP=0 --> START OF THE ANALYSIS
       IF(LOP.EQ.0.OR.LOP.EQ.4) THEN
 C
        CALL GETOUTDIR(JOBDIR,LENJOBDIR)
-C        DIR1 DEFNIED IN PARAM_UMAT.INC
+C        DIR1 DEFNIED IN param_umat.inc
          FILENAME=JOBDIR(:LENJOBDIR)//'/'//DIR1
 C
          OPEN(15,FILE=FILENAME)

@@ -17,3 +17,4 @@ CHARACTER(256) DIR2
 PARAMETER (DIR2='prefdir.inp')
 
 END module global
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!

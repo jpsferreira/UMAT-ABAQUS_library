@@ -33,7 +33,7 @@ C----------------------------------------------------------------------
 C--------------------------- DECLARATIONS -----------------------------
 C----------------------------------------------------------------------
       IMPLICIT NONE
-      INCLUDE 'PARAM_UMAT.INC'
+      INCLUDE 'param_umat.inc'
 C     ADD COMMON BLOCKS HERE IF NEEDED (and in uexternal)
 C      COMMON /KBLOCK/KBLOCK
 

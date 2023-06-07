@@ -15,61 +15,6 @@ PARAMETER (DIR2='prefdir.inp')
 
 
 END module global
-SUBROUTINE csfibfic(cfic,rho,dw,ddw,m,rw,ndi)
-use global
-IMPLICIT NONE
-
-INTEGER, INTENT(IN)                      :: ndi
-DOUBLE PRECISION, INTENT(OUT)            :: cfic(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: rho
-DOUBLE PRECISION, INTENT(IN)             :: dw
-DOUBLE PRECISION, INTENT(IN)             :: ddw
-DOUBLE PRECISION, INTENT(IN)             :: m(ndi)
-DOUBLE PRECISION, INTENT(IN)             :: rw
-
-
-
-INTEGER :: i1,j1,k1,l1
-
-DOUBLE PRECISION :: aux
-
-
-aux = rho*rw*ddw
-DO i1=1,ndi
-  DO j1=1,ndi
-    DO k1=1,ndi
-      DO l1=1,ndi
-        cfic(i1,j1,k1,l1)=aux*m(i1)*m(j1)*m(k1)*m(l1)
-      END DO
-    END DO
-  END DO
-END DO
-
-RETURN
-END SUBROUTINE csfibfic
-SUBROUTINE sigisomatfic(sfic,pkfic,f,det,ndi)
-
-
-
-!>    ISOTROPIC MATRIX:  ISOCHORIC CAUCHY STRESS
-use global
-IMPLICIT NONE
-
-
-INTEGER, INTENT(IN OUT)                  :: ndi
-DOUBLE PRECISION, INTENT(IN OUT)         :: sfic(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN OUT)         :: pkfic(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN OUT)         :: f(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN OUT)         :: det
-
-
-
-
-
-CALL push2(sfic,pkfic,f,det,ndi)
-
-RETURN
-END SUBROUTINE sigisomatfic
 SUBROUTINE uexternaldb(lop,lrestart,time,dtime,kstep,kinc)
 !
 !>    READ FILAMENTS ORIENTATION AND PREFERED DIRECTIONS
@@ -111,68 +56,108 @@ END IF
 RETURN
 
 END SUBROUTINE uexternaldb
-SUBROUTINE getoutdir(outdir, lenoutdir)
+SUBROUTINE projlag(c,aa,pl,ndi)
 
 
 
-!>     GET CURRENT WORKING DIRECTORY
-INCLUDE 'aba_param.inc'
-
-
-CHARACTER (LEN=256), INTENT(IN OUT)      :: outdir
-INTEGER, INTENT(OUT)                     :: lenoutdir
-
-
-
-CALL getcwd(outdir)
-!        OUTDIR=OUTDIR(1:SCAN(OUTDIR,'\',BACK=.TRUE.)-1)
-lenoutdir=len_trim(outdir)
-
-RETURN
-END SUBROUTINE getoutdir
-SUBROUTINE pk2isomatfic(fic,diso,cbar,cbari1,unit2,ndi)
-
-
-
-!>     ISOTROPIC MATRIX: 2PK 'FICTICIOUS' STRESS TENSOR
-!      INPUT:
-!       DISO - STRAIN-ENERGY DERIVATIVES
-!       CBAR - DEVIATORIC LEFT CAUCHY-GREEN TENSOR
-!       CBARI1,CBARI2 - CBAR INVARIANTS
-!       UNIT2 - 2ND ORDER IDENTITY TENSOR
-!      OUTPUT:
-!       FIC - 2ND PIOLA KIRCHOOF 'FICTICIOUS' STRESS TENSOR
+!>    LAGRANGIAN PROJECTION TENSOR
+!      INPUTS:
+!          IDENTITY TENSORS - A, AA
+!          ISOCHORIC LEFT CAUCHY GREEN TENSOR - C
+!          INVERSE OF C - CINV
+!      OUTPUTS:
+!          4TH ORDER SYMMETRIC LAGRANGIAN PROJECTION TENSOR - PL
 use global
 IMPLICIT NONE
 
-INTEGER, INTENT(IN)                      :: ndi
-DOUBLE PRECISION, INTENT(OUT)            :: fic(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: diso(5)
-DOUBLE PRECISION, INTENT(IN)             :: cbar(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: cbari1
-DOUBLE PRECISION, INTENT(IN)             :: unit2(ndi,ndi)
+INTEGER, INTENT(IN OUT)                      :: ndi
+DOUBLE PRECISION, INTENT(IN)             :: c(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN)             :: aa(ndi,ndi,ndi,ndi)
+DOUBLE PRECISION, INTENT(OUT)            :: pl(ndi,ndi,ndi,ndi)
 
 
 
-INTEGER :: i1,j1
+INTEGER :: i,j,k,l
 
-DOUBLE PRECISION :: dudi1,dudi2
-DOUBLE PRECISION :: aux1,aux2
+DOUBLE PRECISION :: cinv(ndi,ndi)
 
-dudi1=diso(1)
-dudi2=diso(2)
+CALL matinv3d(c,cinv,ndi)
 
-aux1=two*(dudi1+cbari1*dudi2)
-aux2=-two*dudi2
-
-DO i1=1,ndi
-  DO j1=1,ndi
-    fic(i1,j1)=aux1*unit2(i1,j1)+aux2*cbar(i1,j1)
+DO i=1,ndi
+  DO j=1,ndi
+    DO k=1,ndi
+      DO l=1,ndi
+        pl(i,j,k,l)=aa(i,j,k,l)-(one/three)*(cinv(i,j)*c(k,l))
+      END DO
+    END DO
   END DO
 END DO
 
 RETURN
-END SUBROUTINE pk2isomatfic
+END SUBROUTINE projlag
+SUBROUTINE onem(a,aa,aas,ndi)
+
+
+
+!>      THIS SUBROUTINE GIVES:
+!>          2ND ORDER IDENTITY TENSORS - A
+!>          4TH ORDER IDENTITY TENSOR - AA
+!>          4TH ORDER SYMMETRIC IDENTITY TENSOR - AAS
+use global
+IMPLICIT NONE
+
+INTEGER, INTENT(IN)                      :: ndi
+DOUBLE PRECISION, INTENT(OUT)            :: a(ndi,ndi)
+DOUBLE PRECISION, INTENT(OUT)            :: aa(ndi,ndi,ndi,ndi)
+DOUBLE PRECISION, INTENT(OUT)            :: aas(ndi,ndi,ndi,ndi)
+
+
+
+INTEGER :: i,j,k,l
+
+
+
+DO i=1,ndi
+  DO j=1,ndi
+    IF (i == j) THEN
+      a(i,j) = one
+    ELSE
+      a(i,j) = zero
+    END IF
+  END DO
+END DO
+
+DO i=1,ndi
+  DO j=1,ndi
+    DO k=1,ndi
+      DO l=1,ndi
+        aa(i,j,k,l)=a(i,k)*a(j,l)
+        aas(i,j,k,l)=(one/two)*(a(i,k)*a(j,l)+a(i,l)*a(j,k))
+      END DO
+    END DO
+  END DO
+END DO
+
+RETURN
+END SUBROUTINE onem
+SUBROUTINE resetdfgrd(dfgrd,ndi)
+
+use global
+implicit none
+INTEGER, INTENT(IN OUT)                  :: ndi
+DOUBLE PRECISION, INTENT(OUT)            :: dfgrd(ndi,ndi)
+
+dfgrd(1,1)=  one
+dfgrd(1,2)=  zero
+dfgrd(1,3)=  zero
+dfgrd(2,1)=  zero
+dfgrd(2,2)=  one
+dfgrd(2,3)=  zero
+dfgrd(3,1)=  zero
+dfgrd(3,2)=  zero
+dfgrd(3,3)=  one
+
+END SUBROUTINE resetdfgrd
 SUBROUTINE hvwrite(statev,hv,v1,ndi)
 
 
@@ -230,463 +215,192 @@ INTEGER :: i1,j1
     END DO
 RETURN
 END SUBROUTINE contraction22
-SUBROUTINE pk2anisomatfic(afic,daniso,cbar,inv4,st0,ndi)
-!
-use global
-implicit none
-!>      ANISOTROPIC MATRIX: 2PK 'FICTICIOUS' STRESS TENSOR
-!       INPUT:
-!       DANISO - ANISOTROPIC STRAIN-ENERGY DERIVATIVES
-!       CBAR - DEVIATORIC LEFT CAUCHY-GREEN TENSOR
-!       INV1,INV4 -CBAR INVARIANTS
-!       UNIT2 - 2ND ORDER IDENTITY TENSOR
-!       OUTPUT:
-!       AFIC - 2ND PIOLA KIRCHOOF 'FICTICIOUS' STRESS TENSOR
-INTEGER, INTENT(IN OUT)                  :: ndi
-DOUBLE PRECISION, INTENT(OUT)            :: afic(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: daniso(3)
-DOUBLE PRECISION, INTENT(IN OUT)         :: cbar(3,3)
-DOUBLE PRECISION, INTENT(IN OUT)         :: inv4
-DOUBLE PRECISION, INTENT(IN)             :: st0(3,3)
+SUBROUTINE chemicalstat(frac,frac0,k,dtime)
 
-DOUBLE PRECISION :: dudi4,di4dc(3,3)
-
-
-
-!-----------------------------------------------------------------------------
-!FIRST DERIVATIVE OF SSEANISO IN ORDER TO I4
-dudi4=daniso(1)
-
-di4dc=st0
-
-afic=two*(dudi4*di4dc)
-
-RETURN
-END SUBROUTINE pk2anisomatfic
-SUBROUTINE stretch(c,b,u,v,ndi)
-
-
-
-!>    STRETCH TENSORS
 
 use global
 IMPLICIT NONE
 
-INTEGER, INTENT(IN OUT)                  :: ndi
-
-DOUBLE PRECISION, INTENT(IN OUT)         :: c(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN OUT)         :: b(ndi,ndi)
-DOUBLE PRECISION, INTENT(OUT)            :: u(ndi,ndi)
-DOUBLE PRECISION, INTENT(OUT)            :: v(ndi,ndi)
+DOUBLE PRECISION, INTENT(OUT)            :: frac(4)
+DOUBLE PRECISION, INTENT(IN)             :: frac0(4)
+DOUBLE PRECISION, INTENT(IN)             :: k(7)
+DOUBLE PRECISION, INTENT(IN)             :: dtime
 
 
+DOUBLE PRECISION :: stiff(4,4)
 
+DOUBLE PRECISION :: aux
+INTEGER :: i1,j1
 
-DOUBLE PRECISION :: eigval(ndi),omega(ndi),eigvec(ndi,ndi)
+frac=zero
+stiff=zero
+stiff(1,1)=-k(1)
+stiff(1,2)=k(2)
+stiff(1,4)=k(7)
+stiff(2,1)=k(1)
+stiff(2,2)=-k(2)-k(3)
+stiff(2,3)=k(4)
+stiff(3,2)=k(3)
+stiff(3,3)=-k(4)-k(5)
+stiff(3,4)=k(6)
+stiff(4,3)=k(5)
+stiff(4,4)=-k(6)-k(7)
 
-CALL spectral(c,omega,eigvec)
-
-eigval(1) = DSQRT(omega(1))
-eigval(2) = DSQRT(omega(2))
-eigval(3) = DSQRT(omega(3))
-
-u(1,1) = eigval(1)
-u(2,2) = eigval(2)
-u(3,3) = eigval(3)
-
-u = matmul(matmul(eigvec,u),transpose(eigvec))
-
-CALL spectral(b,omega,eigvec)
-
-eigval(1) = DSQRT(omega(1))
-eigval(2) = DSQRT(omega(2))
-eigval(3) = DSQRT(omega(3))
-!      write(*,*) eigvec(1,1),eigvec(2,1),eigvec(3,1)
-
-v(1,1) = eigval(1)
-v(2,2) = eigval(2)
-v(3,3) = eigval(3)
-
-v = matmul(matmul(eigvec,v),transpose(eigvec))
-RETURN
-END SUBROUTINE stretch
-SUBROUTINE spectral(a,d,v)
-
-
-
-!>    EIGENVALUES AND EIGENVECTOR OF A 3X3 MATRIX
-!     THIS SUBROUTINE CALCULATES THE EIGENVALUES AND EIGENVECTORS OF
-!     A SYMMETRIC 3X3 MATRIX A.
-
-!     THE OUTPUT CONSISTS OF A VECTOR D CONTAINING THE THREE
-!     EIGENVALUES IN ASCENDING ORDER, AND A MATRIX V WHOSE
-!     COLUMNS CONTAIN THE CORRESPONDING EIGENVECTORS.
-
-use global
-
-DOUBLE PRECISION, INTENT(IN OUT)         :: a(3,3)
-DOUBLE PRECISION                         :: e(3,3)
-DOUBLE PRECISION, INTENT(IN OUT)         :: d(3)
-DOUBLE PRECISION, INTENT(IN OUT)         :: v(3,3)
-
-INTEGER :: nrot
-INTEGER :: np=3
-
-
-
-e = a
-
-CALL jacobi(e,3,np,d,v,nrot)
-CALL eigsrt(d,v,3,np)
-
-RETURN
-END SUBROUTINE spectral
-
-!***********************************************************************
-
-SUBROUTINE jacobi(a,n,np,d,v,nrot)
-
-! COMPUTES ALL EIGENVALUES AND EIGENVECTORS OF A REAL SYMMETRIC
-!  MATRIX A, WHICH IS OF SIZE N BY N, STORED IN A PHYSICAL
-!  NP BY NP ARRAY.  ON OUTPUT, ELEMENTS OF A ABOVE THE DIAGONAL
-!  ARE DESTROYED, BUT THE DIAGONAL AND SUB-DIAGONAL ARE UNCHANGED
-!  AND GIVE FULL INFORMATION ABOUT THE ORIGINAL SYMMETRIC MATRIX.
-!  VECTOR D RETURNS THE EIGENVALUES OF A IN ITS FIRST N ELEMENTS.
-!  V IS A MATRIX WITH THE SAME LOGICAL AND PHYSICAL DIMENSIONS AS
-!  A WHOSE COLUMNS CONTAIN, UPON OUTPUT, THE NORMALIZED
-!  EIGENVECTORS OF A.  NROT RETURNS THE NUMBER OF JACOBI ROTATION
-!  WHICH WERE REQUIRED.
-
-! THIS SUBROUTINE IS TAKEN FROM 'NUMERICAL RECIPES.'
-use global
-IMPLICIT NONE
-
-INTEGER, INTENT(IN OUT)                  :: np
-DOUBLE PRECISION, INTENT(IN OUT)         :: a(np,np)
-INTEGER, INTENT(IN)                      :: n
-DOUBLE PRECISION, INTENT(OUT)            :: d(np)
-DOUBLE PRECISION, INTENT(OUT)            :: v(np,np)
-INTEGER, INTENT(OUT)                     :: nrot
-
-INTEGER :: ip,iq,  i,j
-INTEGER, PARAMETER :: nmax=100
-
-DOUBLE PRECISION :: b(nmax),z(nmax), sm,tresh,g,t,h,theta,s,c,tau
-
-
-! INITIALIZE V TO THE IDENTITY MATRIX
-DO i=1,3
-  v(i,i)=one
-  DO j=1,3
-    IF (i /= j)THEN
-      v(i,j)=zero
-    END IF
+DO i1=1,4
+  aux=zero
+  DO j1=1,4
+    aux=aux+stiff(i1,j1)*frac0(j1)
   END DO
-END DO
-! INITIALIZE B AND D TO THE DIAGONAL OF A, AND Z TO ZERO.
-!  THE VECTOR Z WILL ACCUMULATE TERMS OF THE FORM T*A_PQ AS
-!  IN EQUATION (11.1.14)
-
-DO ip = 1,n
-  b(ip) = a(ip,ip)
-  d(ip) = b(ip)
-  z(ip) = 0.d0
+  frac(i1)=aux*dtime+frac0(i1)
 END DO
 
-
-! BEGIN ITERATION
-
-nrot = 0
-DO i=1,50
-  
-!         SUM OFF-DIAGONAL ELEMENTS
-  
-  sm = 0.d0
-  DO ip=1,n-1
-    DO iq=ip+1,n
-      sm = sm + DABS(a(ip,iq))
-    END DO
-  END DO
-  
-!          IF SM = 0., THEN RETURN.  THIS IS THE NORMAL RETURN,
-!          WHICH RELIES ON QUADRATIC CONVERGENCE TO MACHINE
-!          UNDERFLOW.
-  
-  IF (sm == 0.d0) RETURN
-  
-!          IN THE FIRST THREE SWEEPS CARRY OUT THE PQ ROTATION ONLY IF
-!           |A_PQ| > TRESH, WHERE TRESH IS SOME THRESHOLD VALUE,
-!           SEE EQUATION (11.1.25).  THEREAFTER TRESH = 0.
-  
-  IF (i < 4) THEN
-    tresh = 0.2D0*sm/n**2
-  ELSE
-    tresh = 0.d0
-  END IF
-  
-  DO ip=1,n-1
-    DO iq=ip+1,n
-      g = 100.d0*DABS(a(ip,iq))
-      
-!              AFTER FOUR SWEEPS, SKIP THE ROTATION IF THE
-!               OFF-DIAGONAL ELEMENT IS SMALL.
-      
-      IF ((i > 4).AND.(DABS(d(ip))+g == DABS(d(ip)))  &
-            .AND.(DABS(d(iq))+g == DABS(d(iq)))) THEN
-        a(ip,iq) = 0.d0
-      ELSE IF (DABS(a(ip,iq)) > tresh) THEN
-        h = d(iq) - d(ip)
-        IF (DABS(h)+g == DABS(h)) THEN
-          
-!                  T = 1./(2.*THETA), EQUATION (11.1.10)
-          
-          t =a(ip,iq)/h
-        ELSE
-          theta = 0.5D0*h/a(ip,iq)
-          t =1.d0/(DABS(theta)+DSQRT(1.d0+theta**2.d0))
-          IF (theta < 0.d0) t = -t
-        END IF
-        c = 1.d0/DSQRT(1.d0 + t**2.d0)
-        s = t*c
-        tau = s/(1.d0 + c)
-        h = t*a(ip,iq)
-        z(ip) = z(ip) - h
-        z(iq) = z(iq) + h
-        d(ip) = d(ip) - h
-        d(iq) = d(iq) + h
-        a(ip,iq) = 0.d0
-        
-!               CASE OF ROTATIONS 1 <= J < P
-        
-        DO j=1,ip-1
-          g = a(j,ip)
-          h = a(j,iq)
-          a(j,ip) = g - s*(h + g*tau)
-          a(j,iq) = h + s*(g - h*tau)
-        END DO
-        
-!                CASE OF ROTATIONS P < J < Q
-        
-        DO j=ip+1,iq-1
-          g = a(ip,j)
-          h = a(j,iq)
-          a(ip,j) = g - s*(h + g*tau)
-          a(j,iq) = h + s*(g - h*tau)
-        END DO
-        
-!                 CASE OF ROTATIONS Q < J <= N
-        
-        DO j=iq+1,n
-          g = a(ip,j)
-          h = a(iq,j)
-          a(ip,j) = g - s*(h + g*tau)
-          a(iq,j) = h + s*(g - h*tau)
-        END DO
-        DO j = 1,n
-          g = v(j,ip)
-          h = v(j,iq)
-          v(j,ip) = g - s*(h + g*tau)
-          v(j,iq) = h + s*(g - h*tau)
-        END DO
-        nrot = nrot + 1
-      END IF
-    END DO
-  END DO
-  
-!          UPDATE D WITH THE SUM OF T*A_PQ, AND REINITIALIZE Z
-  
-  DO ip=1,n
-    b(ip) = b(ip) + z(ip)
-    d(ip) = b(ip)
-    z(ip) = 0.d0
-  END DO
-END DO
-
-! IF THE ALGORITHM HAS REACHED THIS STAGE, THEN THERE
-!  ARE TOO MANY SWEEPS.  PRINT A DIAGNOSTIC AND CUT THE
-!  TIME INCREMENT.
-
-WRITE (*,'(/1X,A/)') '50 ITERATIONS IN JACOBI SHOULD NEVER HAPPEN'
+!      FRAC0=FRAC
 
 RETURN
-END SUBROUTINE jacobi
-
-!**********************************************************************
-
-SUBROUTINE eigsrt(d,v,n,np)
-
-!     GIVEN THE EIGENVALUES D AND EIGENVECTORS V AS OUTPUT FROM
-!     JACOBI, THIS SUBROUTINE SORTS THE EIGENVALUES INTO ASCENDING
-!     ORDER AND REARRANGES THE COLMNS OF V ACCORDINGLY.
-
-!     THE SUBROUTINE WAS TAKEN FROM 'NUMERICAL RECIPES.'
-use global
-
-DOUBLE PRECISION, INTENT(IN OUT)         :: d(np)
-DOUBLE PRECISION, INTENT(IN OUT)         :: v(np,np)
-INTEGER, INTENT(IN)                      :: n
-INTEGER, INTENT(IN OUT)                  :: np
-
-
-INTEGER :: i,j,k
-
-DOUBLE PRECISION :: p
-
-DO i=1,n-1
-  k = i
-  p = d(i)
-  DO j=i+1,n
-    IF (d(j) >= p) THEN
-      k = j
-      p = d(j)
-    END IF
-  END DO
-  IF (k /= i) THEN
-    d(k) = d(i)
-    d(i) = p
-    DO j=1,n
-      p = v(j,i)
-      v(j,i) = v(j,k)
-      v(j,k) = p
-    END DO
-  END IF
-END DO
-
-RETURN
-END SUBROUTINE eigsrt
-SUBROUTINE matinv3d(a,a_inv,ndi)
-!>    INVERSE OF A 3X3 MATRIX
-!     RETURN THE INVERSE OF A(3,3) - A_INV
-use global
-
-INTEGER, INTENT(IN OUT)                  :: ndi
-DOUBLE PRECISION, INTENT(IN)             :: a(ndi,ndi)
-DOUBLE PRECISION, INTENT(OUT)            :: a_inv(ndi,ndi)
-
-DOUBLE PRECISION :: det_a,det_a_inv
-
-det_a = a(1,1)*(a(2,2)*a(3,3) - a(3,2)*a(2,3)) -  &
-    a(2,1)*(a(1,2)*a(3,3) - a(3,2)*a(1,3)) +  &
-    a(3,1)*(a(1,2)*a(2,3) - a(2,2)*a(1,3))
-
-IF (det_a <= 0.d0) THEN
-  WRITE(*,*) 'WARNING: SUBROUTINE MATINV3D:'
-  WRITE(*,*) 'WARNING: DET OF MAT=',det_a
-  RETURN
-END IF
-
-det_a_inv = 1.d0/det_a
-
-a_inv(1,1) = det_a_inv*(a(2,2)*a(3,3)-a(3,2)*a(2,3))
-a_inv(1,2) = det_a_inv*(a(3,2)*a(1,3)-a(1,2)*a(3,3))
-a_inv(1,3) = det_a_inv*(a(1,2)*a(2,3)-a(2,2)*a(1,3))
-a_inv(2,1) = det_a_inv*(a(3,1)*a(2,3)-a(2,1)*a(3,3))
-a_inv(2,2) = det_a_inv*(a(1,1)*a(3,3)-a(3,1)*a(1,3))
-a_inv(2,3) = det_a_inv*(a(2,1)*a(1,3)-a(1,1)*a(2,3))
-a_inv(3,1) = det_a_inv*(a(2,1)*a(3,2)-a(3,1)*a(2,2))
-a_inv(3,2) = det_a_inv*(a(3,1)*a(1,2)-a(1,1)*a(3,2))
-a_inv(3,3) = det_a_inv*(a(1,1)*a(2,2)-a(2,1)*a(1,2))
-
-RETURN
-END SUBROUTINE matinv3d
-SUBROUTINE invariants(a,inv1,inv2,ndi)
+END SUBROUTINE chemicalstat
+SUBROUTINE relax(qv,hv,aux1,hv0,pkiso,dtime,tau,teta,ndi)
 
 
 
-!>    1ST AND 2ND INVARIANTS OF A TENSOR
+!>    VISCOUS DISSIPATION: STRESS RELAXATION TENSORS
 use global
 IMPLICIT NONE
 
 INTEGER, INTENT(IN)                      :: ndi
-DOUBLE PRECISION, INTENT(IN)             :: a(ndi,ndi)
-DOUBLE PRECISION, INTENT(OUT)            :: inv1
-DOUBLE PRECISION, INTENT(OUT)            :: inv2
+DOUBLE PRECISION, INTENT(OUT)            :: qv(ndi,ndi)
+DOUBLE PRECISION, INTENT(OUT)            :: hv(ndi,ndi)
+DOUBLE PRECISION, INTENT(OUT)            :: aux1
+DOUBLE PRECISION, INTENT(IN)             :: hv0(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN)             :: pkiso(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN)             :: dtime
+DOUBLE PRECISION, INTENT(IN OUT)         :: tau
+DOUBLE PRECISION, INTENT(IN)             :: teta
 
 
 
-INTEGER :: i1
-DOUBLE PRECISION :: aa(ndi,ndi)
-DOUBLE PRECISION :: inv1aa
+INTEGER :: i1,j1
 
-inv1=zero
-inv1aa=zero
-aa=matmul(a,a)
+DOUBLE PRECISION :: aux
+
+qv=zero
+hv=zero
+
+aux=DEXP(-dtime*((two*tau)**(-one)))
+aux1=teta*aux
 DO i1=1,ndi
-  inv1=inv1+a(i1,i1)
-  inv1aa=inv1aa+aa(i1,i1)
+  DO j1=1,ndi
+    qv(i1,j1)=hv0(i1,j1)+aux1*pkiso(i1,j1)
+    hv(i1,j1)=aux*(aux*qv(i1,j1)-teta*pkiso(i1,j1))
+  END DO
 END DO
-inv2=(one/two)*(inv1*inv1-inv1aa)
 
 RETURN
-END SUBROUTINE invariants
-SUBROUTINE contraction24(s,LT,rt,ndi)
-
-
-
-!>       DOUBLE CONTRACTION BETWEEN 4TH ORDER AND 2ND ORDER  TENSOR
-!>      INPUT:
-!>       LT - RIGHT 2ND ORDER TENSOR
-!>       RT - LEFT  4TH ODER TENSOR
-!>      OUTPUT:
-!>       S - DOUBLE CONTRACTED TENSOR (2ND ORDER)
+END SUBROUTINE relax
+SUBROUTINE pull2(pk,sig,finv,det,ndi)
+!>       PULL-BACK TIMES DET OF A 2ND ORDER TENSOR
 use global
 IMPLICIT NONE
 
 INTEGER, INTENT(IN)                      :: ndi
-DOUBLE PRECISION, INTENT(OUT)            :: s(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: lt(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: rt(ndi,ndi,ndi,ndi)
+DOUBLE PRECISION, INTENT(OUT)            :: pk(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN)             :: sig(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN)             :: finv(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN)             :: det
 
 
 
-INTEGER :: i1,j1,k1,l1
+INTEGER :: i1,j1,ii1,jj1
 
 
 DOUBLE PRECISION :: aux
 
 
-
-DO k1=1,ndi
-  DO l1=1,ndi
+DO i1=1,ndi
+  DO j1=1,ndi
     aux=zero
-    DO i1=1,ndi
-      DO j1=1,ndi
-        aux=aux+lt(k1,l1)*rt(i1,j1,k1,l1)
+    DO ii1=1,ndi
+      DO jj1=1,ndi
+        aux=aux+det*finv(i1,ii1)*finv(j1,jj1)*sig(ii1,jj1)
       END DO
     END DO
-    s(k1,l1)=aux
+    pk(i1,j1)=aux
   END DO
 END DO
+
 RETURN
-END SUBROUTINE contraction24
-SUBROUTINE tensorprod2(a,b,c,ndi)
+END SUBROUTINE pull2
+SUBROUTINE sdvwrite(det,lambda,frac_pld,prefang,statev)
+!>    VISCOUS DISSIPATION: WRITE STATE VARS
+use global
+implicit none
+
+INTEGER :: pos1
 !
+DOUBLE PRECISION, INTENT(IN)             :: det,lambda,frac_pld,prefang
+DOUBLE PRECISION, INTENT(OUT)            :: statev(nsdv)
+!
+pos1=0
+statev(pos1+1)=det
+statev(pos1+2)=lambda
+statev(pos1+3)=frac_pld
+statev(pos1+4)=prefang
+
+
+RETURN
+
+END SUBROUTINE sdvwrite
+SUBROUTINE rotation(f,r,u,ndi)
+
+
+
+!>    COMPUTES ROTATION TENSOR
+use global
 IMPLICIT NONE
-!
-INTEGER, INTENT(IN)                      :: ndi
-DOUBLE PRECISION, INTENT(IN)             :: a(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: b(ndi,ndi)
-DOUBLE PRECISION, INTENT(OUT)            :: c(ndi,ndi,ndi,ndi)
+
+INTEGER, INTENT(IN OUT)                  :: ndi
+DOUBLE PRECISION, INTENT(IN OUT)         :: f(ndi,ndi)
+DOUBLE PRECISION, INTENT(OUT)            :: r(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN OUT)         :: u(ndi,ndi)
 
 
 
-INTEGER :: i,j,k,l
+
+DOUBLE PRECISION :: uinv(ndi,ndi)
+
+CALL matinv3d(u,uinv,ndi)
+
+r = matmul(f,uinv)
+RETURN
+END SUBROUTINE rotation
+SUBROUTINE erfi(erf,b,nterm)
+!>    IMAGINARY ERROR FUNCTION OF SQRT(B); B IS THE DISPERSION PARAM
+use global
+IMPLICIT NONE
+
+DOUBLE PRECISION, INTENT(OUT)            :: erf
+DOUBLE PRECISION, INTENT(IN OUT)         :: b
+INTEGER, INTENT(IN)                      :: nterm
 
 
+DOUBLE PRECISION :: pi
+DOUBLE PRECISION :: aux,aux1,aux2,aux3,aux4,fact
+INTEGER :: i1,j1
 
-DO i=1,ndi
-  DO j=1,ndi
-    DO k=1,ndi
-      DO l=1,ndi
-        c(i,j,k,l)=a(i,j)*b(k,l)
-      END DO
-    END DO
-  END DO
+pi=four*ATAN(one)
+aux=SQRT(two*b)
+aux1=two*aux
+aux2=(two/three)*(aux**three)
+aux4=zero
+DO j1=3,nterm
+  i1=j1-1
+  CALL factorial (fact,i1)
+  aux3=two*j1-one
+  aux4=aux4+(aux**aux3)/(half*aux3*fact)
 END DO
 
+erf=pi**(-one/two)*(aux1+aux2+aux4)
 RETURN
-
-END SUBROUTINE tensorprod2
+END SUBROUTINE erfi
 SUBROUTINE manisomat_discrete(w,pkfic,cmfic,f,props,  &
         efi,noel,npt,kinc,det,factor,prefdir,ang_pref,pulled,ndi)
 !
@@ -972,196 +686,344 @@ lf       = props(7)
 !write(*,*) w,rr,area_total
 RETURN
 END SUBROUTINE manisomat_discrete
-SUBROUTINE metvol(cvol,c,pv,ppv,det,ndi)
+SUBROUTINE stretch(c,b,u,v,ndi)
 
 
 
-!>    VOLUMETRIC MATERIAL ELASTICITY TENSOR
+!>    STRETCH TENSORS
+
 use global
 IMPLICIT NONE
 
-INTEGER, INTENT(IN OUT)                      :: ndi
-DOUBLE PRECISION, INTENT(OUT)            :: cvol(ndi,ndi,ndi,ndi)
+INTEGER, INTENT(IN OUT)                  :: ndi
+
 DOUBLE PRECISION, INTENT(IN OUT)         :: c(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN OUT)         :: pv
-DOUBLE PRECISION, INTENT(IN OUT)         :: ppv
+DOUBLE PRECISION, INTENT(IN OUT)         :: b(ndi,ndi)
+DOUBLE PRECISION, INTENT(OUT)            :: u(ndi,ndi)
+DOUBLE PRECISION, INTENT(OUT)            :: v(ndi,ndi)
+
+
+
+
+DOUBLE PRECISION :: eigval(ndi),omega(ndi),eigvec(ndi,ndi)
+
+CALL spectral(c,omega,eigvec)
+
+eigval(1) = DSQRT(omega(1))
+eigval(2) = DSQRT(omega(2))
+eigval(3) = DSQRT(omega(3))
+
+u(1,1) = eigval(1)
+u(2,2) = eigval(2)
+u(3,3) = eigval(3)
+
+u = matmul(matmul(eigvec,u),transpose(eigvec))
+
+CALL spectral(b,omega,eigvec)
+
+eigval(1) = DSQRT(omega(1))
+eigval(2) = DSQRT(omega(2))
+eigval(3) = DSQRT(omega(3))
+!      write(*,*) eigvec(1,1),eigvec(2,1),eigvec(3,1)
+
+v(1,1) = eigval(1)
+v(2,2) = eigval(2)
+v(3,3) = eigval(3)
+
+v = matmul(matmul(eigvec,v),transpose(eigvec))
+RETURN
+END SUBROUTINE stretch
+SUBROUTINE anisomat_discrete(w,sfic,cfic,f,props,  &
+        efi,noel,npt,kinc,det,factor,prefdir, ang_pref,pulled,ndi)
+
+!>    AFFINE NETWORK: 'FICTICIOUS' CAUCHY STRESS AND ELASTICITY TENSOR
+!> DISCRETE ANGULAR INTEGRATION SCHEME (icosahedron)
+use global
+IMPLICIT NONE
+
+INTEGER, INTENT(IN)                      :: ndi
+DOUBLE PRECISION, INTENT(OUT)            :: sfic(ndi,ndi)
+DOUBLE PRECISION, INTENT(OUT)            :: cfic(ndi,ndi,ndi,ndi)
+DOUBLE PRECISION, INTENT(IN OUT)         :: f(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN)             :: props(8)
+DOUBLE PRECISION, INTENT(IN OUT)         :: efi
+INTEGER, INTENT(IN OUT)                  :: noel,npt,kinc
 DOUBLE PRECISION, INTENT(IN OUT)         :: det
+!variables for microstructure state
+DOUBLE PRECISION, INTENT(OUT)            :: pulled
+INTEGER :: j1,k1,l1,m1
+DOUBLE PRECISION :: sfibfic(ndi,ndi), cfibfic(ndi,ndi,ndi,ndi)
+DOUBLE PRECISION :: mfi(ndi),mf0i(ndi)
+DOUBLE PRECISION :: aux,lambdai,dwi,ddwi,ddwi1,ddwi2,ddwi3
+DOUBLE PRECISION :: bdisp,ang,w,wi,rho,aux2,lambdain,lf
+DOUBLE PRECISION :: aic,ais
+DOUBLE PRECISION :: avga,maxa,suma,dirmax(ndi),kk1,kk2,ei
+DOUBLE PRECISION :: prefdir(nelem,4)
+DOUBLE PRECISION :: pd(3),lambda_pref,prefdir0(3),ang_pref
 
 
+! INTEGRATION SCHEME
+  integer ( kind = 4 ) node_num
+  integer ( kind = 4 ) a
+  real ( kind = 8 ) a_xyz(3)
+  real ( kind = 8 ) a2_xyz(3)
+  real ( kind = 8 ) ai !area of triangle i
+  real ( kind = 8 ) area_total
+  integer ( kind = 4 ) b
+  real ( kind = 8 ) b_xyz(3)
+  real ( kind = 8 ) b2_xyz(3)
+  integer ( kind = 4 ) c
+  real ( kind = 8 ) c_xyz(3)
+  real ( kind = 8 ) c2_xyz(3)
+  integer ( kind = 4 ) edge_num
+  integer ( kind = 4 ), allocatable, dimension ( :, : ) :: edge_point
+  integer ( kind = 4 ) f1
+  integer ( kind = 4 ) f2
+  integer ( kind = 4 ) f3
+  integer ( kind = 4 ) face
+  integer ( kind = 4 ) face_num
+  integer ( kind = 4 ), allocatable, dimension ( : ) :: face_order
+  integer ( kind = 4 ), allocatable, dimension ( :, : ) :: face_point
+  integer ( kind = 4 ) face_order_max
+  integer ( kind = 4 ) factor
+  real ( kind = 8 ) node_xyz(3)
+  real ( kind = 8 ), parameter :: pi = 3.141592653589793D+00
+  real ( kind = 8 ), allocatable, dimension ( :, : ) :: point_coord
+  integer ( kind = 4 ) point_num
+  real ( kind = 8 ) rr, aa
+  real ( kind = 8 ) v
 
-INTEGER :: i1,j1,k1,l1
-DOUBLE PRECISION :: cinv(ndi,ndi)
 
-
-CALL matinv3d(c,cinv,ndi)
-
-DO i1 = 1, ndi
-  DO j1 = 1, ndi
-    DO k1 = 1, ndi
-      DO l1 = 1, ndi
-        cvol(i1,j1,k1,l1)= det*ppv*cinv(i1,j1)*cinv(k1,l1)  &
-            -det*pv*(cinv(i1,k1)*cinv(j1,l1) +cinv(i1,l1)*cinv(j1,k1))
-      END DO
-    END DO
-  END DO
-END DO
-
-RETURN
-END SUBROUTINE metvol
-SUBROUTINE pinvariants(a,inv4,ndi,st,lambda,barlambda,det)
+!  Size the icosahedron.
 !
-use global
-implicit none
-!>    AND 4TH PSEUDO-INVARIANTS OF A TENSOR
-INTEGER, INTENT(IN)                      :: ndi
-DOUBLE PRECISION, INTENT(IN)             :: a(ndi,ndi)
-DOUBLE PRECISION, INTENT(OUT)            :: inv4
-DOUBLE PRECISION, INTENT(IN)             :: st(ndi,ndi)
-DOUBLE PRECISION, INTENT(OUT)            :: lambda
-DOUBLE PRECISION, INTENT(OUT)            :: barlambda
-DOUBLE PRECISION, INTENT(IN)             :: det
+  call icos_size ( point_num, edge_num, face_num, face_order_max )
+!
+!  Set the icosahedron.
+!
+  allocate ( point_coord(1:3,1:point_num) )
+  allocate ( edge_point(1:2,1:edge_num) )
+  allocate ( face_order(1:face_num) )
+  allocate ( face_point(1:face_order_max,1:face_num) )
 
+  call icos_shape ( point_num, edge_num, face_num, face_order_max, &
+    point_coord, edge_point, face_order, face_point )
+!
+!  Initialize the integral data.
+!
+  rr = 0.0D+00
+  area_total = 0.0D+00
+  node_num = 0
+  
 
-INTEGER :: i,j
-DOUBLE PRECISION :: scale1
+!! initialize the model data
+  !     fibers
+kk1      = props(4)
+kk2      = props(5)
+bdisp    = props(6)
+lf       = props(7)
 
+  aux=two*(det**(-one))
+  aux2=four*(det**(-four/three))
+  cfic=zero
+  sfic=zero
 
-inv4=zero
-DO i=1,ndi
-  DO j=1, ndi
-    inv4=inv4+a(i,j)*st(i,j)
-  END DO
-END DO
-!     STRETCH
-scale1=det**(-one /three)
-barlambda=DSQRT(inv4)
-lambda=barlambda/scale1
+  aa = zero
+  rr = zero
+  avga=zero
+  maxa=zero
+  suma=zero
+  dirmax=zero
 
+  pulled = zero
+  
+  !preferred direction measures (macroscale measures)
+  prefdir0=prefdir(noel,2:4)
+  !calculate preferred direction in the deformed configuration
+  CALL deffib(lambda_pref,pd,prefdir0,f,ndi)
+  !update preferential direction - deformed configuration
+  pd=pd/dsqrt(dot_product(pd,pd))
+  !rotation of the preferred direction
+  prefdir0=prefdir0/dsqrt(dot_product(prefdir0,prefdir0))
+  ang_pref=dot_product(pd,prefdir0)
+  ang_pref=acos(ang_pref)
+
+  !prefdir1(noel,2:4)=pd
+!  Pick a face of the icosahedron, and identify its vertices as A, B, C.
+!
+  do face = 1, face_num
+!
+    a = face_point(1,face)
+    b = face_point(2,face)
+    c = face_point(3,face)
+!
+    a_xyz(1:3) = point_coord(1:3,a)
+    b_xyz(1:3) = point_coord(1:3,b)
+    c_xyz(1:3) = point_coord(1:3,c)
+!
+!  Some subtriangles will have the same direction as the face.
+!  Generate each in turn, by determining the barycentric coordinates
+!  of the centroid (F1,F2,F3), from which we can also work out the barycentric
+!  coordinates of the vertices of the subtriangle.
+!
+    do f3 = 1, 3 * factor - 2, 3
+      do f2 = 1, 3 * factor - f3 - 1, 3
+
+        f1 = 3 * factor - f3 - f2
+
+        call sphere01_triangle_project ( a_xyz, b_xyz, c_xyz, f1, f2, f3, &
+          node_xyz )
+
+        call sphere01_triangle_project ( &
+          a_xyz, b_xyz, c_xyz, f1 + 2, f2 - 1, f3 - 1, a2_xyz )
+        call sphere01_triangle_project ( &
+          a_xyz, b_xyz, c_xyz, f1 - 1, f2 + 2, f3 - 1, b2_xyz )
+        call sphere01_triangle_project ( &
+          a_xyz, b_xyz, c_xyz, f1 - 1, f2 - 1, f3 + 2, c2_xyz )
+
+        call sphere01_triangle_vertices_to_area ( a2_xyz, b2_xyz, c2_xyz, ai )
+
+        !direction of the sphere triangle barycenter - direction i
+        mf0i=node_xyz
+        CALL deffib(lambdai,mfi,mf0i,f,ndi)
+  
+        CALL bangle(ang,f,mfi,noel,pd,ndi) 
+
+        CALL density(rho,ang,bdisp,efi)
+        !scaled weight
+        ai = ai/(two*pi)
+        !rho=rho/(four*pi)
+        !strain-like of fiber i
+        !lambdai=lambdai*lambdai
+        lambdai=lambdai/lf
+        ei = lambdai-one
+         !calculate fiber sef and sef derivatives values
+        if (ei .ge. zero) then
+
+         
+          wi   = (kk1/(two*kk2))*(dexp(kk2*ei*ei)-one)
+          ! fiber derivatives
+          dwi  = kk1*ei*dexp(kk2*ei*ei)
+          ddwi = kk1*dexp(kk2*ei*ei)*(two*kk2*ei*ei+one)
+          
+                    !fiber sef
+          
+          !update weight
+          ais=ai*half*lambdai**(-one)*lf**(-two)
+          !stress and material  tangent
+        CALL sigfibfic(sfibfic,rho,dwi,mfi,ais,ndi)
+        ! 
+          aic=ais*half*lambdai**(-one)*lf**(-two)
+        CALL csfibfic(cfibfic,rho,dwi,ddwi,mfi,aic,ndi)
+!
+        DO j1=1,ndi
+           DO k1=1,ndi
+              sfic(j1,k1)=sfic(j1,k1)+aux*sfibfic(j1,k1)
+              DO l1=1,ndi
+                DO m1=1,ndi
+                  cfic(j1,k1,l1,m1)=cfic(j1,k1,l1,m1)+aux2*cfibfic(j1,k1,l1,m1)
+                END DO
+              END DO
+           END DO
+         END DO
+!
+        w=w+rho*ai*wi
+        aa=aa+rho*ai
+       endif
+        rr = rr +  rho*ai
+        node_num = node_num + 1
+        area_total = area_total + ai
+        !write(*,*) node_num,ang, rho
+      end do
+    end do
+
+    !pulled=pulled*(node_num**(-one))
+
+! !
+! !  The other subtriangles have the opposite direction from the face.
+! !  Generate each in turn, by determining the barycentric coordinates
+! !  of the centroid (F1,F2,F3), from which we can also work out the barycentric
+! !  coordinates of the vertices of the subtriangle.
+! !
+!     do f3 = 2, 3 * factor - 4, 3
+!       do f2 = 2, 3 * factor - f3 - 2, 3
+
+!         f1 = 3 * factor - f3 - f2
+
+!         call sphere01_triangle_project ( a_xyz, b_xyz, c_xyz, f1, f2, f3, &
+!           node_xyz )
+
+!         call sphere01_triangle_project ( &
+!           a_xyz, b_xyz, c_xyz, f1 - 2, f2 + 1, f3 + 1, a2_xyz )
+!         call sphere01_triangle_project ( &
+!           a_xyz, b_xyz, c_xyz, f1 + 1, f2 - 2, f3 + 1, b2_xyz )
+!         call sphere01_triangle_project ( &
+!           a_xyz, b_xyz, c_xyz, f1 + 1, f2 + 1, f3 - 2, c2_xyz )
+
+!         call sphere01_triangle_vertices_to_area ( a2_xyz, b2_xyz, c2_xyz, ai )
+
+!         !direction of the sphere triangle barycenter - direction i
+!         mf0i=node_xyz
+!         CALL deffib(lambdai,mfi,mf0i,f,ndi)
+  
+!         CALL bangle(ang,f,mfi,noel,ndi)
+!         CALL density(rho,ang,bdisp,efi)
+!         !scaled weight
+!         ai = ai/(four*pi)
+!         !rho=rho/(four*pi)
+!         !strain-like of fiber i
+!         lambdai=lambdai/lf
+!         ei = lambdai-one
+!          !calculate fiber sef and sef derivatives values
+!         if (ei .ge. zero) then
+!           !fiber sef
+          !fiber sef
+!          wi   = (kk1/(two*kk2))*(dexp(kk2*ei*ei)-one)
+          ! fiber derivatives
+!          dwi  = kk1*ei*dexp(kk2*ei*ei)*((two*lambdai)**(-one))
+!          ddwi = (kk1/four)*lambdai**(-three/two)*dexp(kk2*ei*ei) & 
+!              & *(two*kk2*(lambdai**(-three/two)-two*lambdai*lambdai+lambdai) + one)
+!            ais=ai*(lf**(-two))
+!           !stress and material  tangent 
+!         CALL sigfibfic(sfibfic,rho,dwi,mfi,ais,ndi)
+!         ! 
+!            aic=ais*(lf**(-two))
+!         CALL csfibfic(cfibfic,rho,dwi,ddwi,mfi,aic,ndi)
+!         !
+!         DO j1=1,ndi
+!            DO k1=1,ndi
+!               sfic(j1,k1)=sfic(j1,k1)+aux*sfibfic(j1,k1)
+!               DO l1=1,ndi
+!                 DO m1=1,ndi
+!                   cfic(j1,k1,l1,m1)=cfic(j1,k1,l1,m1)+aux2*cfibfic(j1,k1,l1,m1)
+!                 END DO
+!               END DO
+!            END DO
+!          END DO
+! !
+!         w=w+rho*ai*wi
+!         aa=aa+1
+!        endif
+!         rr = rr +  rho*ai
+!         node_num = node_num + 1  
+!         area_total = area_total + ai
+!         write(*,*) node_num,ang, rho
+!       end do
+!     end do
+
+   end do
+   pulled=aa/rr
+  ! write(*,*) ang_pref*180.d0/pi,pulled
+! !
+!  Discard allocated memory.
+!
+  deallocate ( edge_point )
+  deallocate ( face_order )
+  deallocate ( face_point )
+  deallocate ( point_coord )
+
+!write(*,*) w,rr,area_total
 RETURN
-END SUBROUTINE pinvariants
-SUBROUTINE contraction42(s,LT,rt,ndi)
-
-
-
-!>       DOUBLE CONTRACTION BETWEEN 4TH ORDER AND 2ND ORDER  TENSOR
-!>      INPUT:
-!>       LT - left 4TH ORDER TENSOR
-!>       RT - right  2ND ODER TENSOR
-!>      OUTPUT:
-!>       S - DOUBLE CONTRACTED TENSOR (2ND ORDER)
-use global
-IMPLICIT NONE
-
-INTEGER, INTENT(IN)                      :: ndi
-DOUBLE PRECISION, INTENT(OUT)            :: s(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: LT(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: rt(ndi,ndi)
-
-
-INTEGER :: i1,j1,k1,l1
-
-
-DOUBLE PRECISION :: aux
-
-
-
-DO i1=1,ndi
-  DO j1=1,ndi
-    aux=zero
-    DO k1=1,ndi
-      DO l1=1,ndi
-        aux=aux+LT(i1,j1,k1,l1)*rt(k1,l1)
-      END DO
-    END DO
-    s(i1,j1)=aux
-  END DO
-END DO
-RETURN
-END SUBROUTINE contraction42
-SUBROUTINE factorial(fact,term)
-
-
-
-!>    FACTORIAL
-use global
-IMPLICIT NONE
-
-DOUBLE PRECISION, INTENT(OUT)            :: fact
-INTEGER, INTENT(IN)                      :: term
-
-
-
-INTEGER :: m
-
-fact = 1
-
-DO  m = 1, term
-  fact = fact * m
-END DO
-
-RETURN
-END SUBROUTINE factorial
-SUBROUTINE pull2(pk,sig,finv,det,ndi)
-!>       PULL-BACK TIMES DET OF A 2ND ORDER TENSOR
-use global
-IMPLICIT NONE
-
-INTEGER, INTENT(IN)                      :: ndi
-DOUBLE PRECISION, INTENT(OUT)            :: pk(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: sig(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: finv(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: det
-
-
-
-INTEGER :: i1,j1,ii1,jj1
-
-
-DOUBLE PRECISION :: aux
-
-
-DO i1=1,ndi
-  DO j1=1,ndi
-    aux=zero
-    DO ii1=1,ndi
-      DO jj1=1,ndi
-        aux=aux+det*finv(i1,ii1)*finv(j1,jj1)*sig(ii1,jj1)
-      END DO
-    END DO
-    pk(i1,j1)=aux
-  END DO
-END DO
-
-RETURN
-END SUBROUTINE pull2
-SUBROUTINE pk2vol(pkvol,pv,c,ndi)
-
-
-
-!>    VOLUMETRIC PK2 STRESS
-use global
-IMPLICIT NONE
-
-INTEGER, INTENT(IN OUT)                      :: ndi
-DOUBLE PRECISION, INTENT(OUT)            :: pkvol(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: pv
-DOUBLE PRECISION, INTENT(IN OUT)         :: c(ndi,ndi)
-
-
-INTEGER :: i1,j1
-DOUBLE PRECISION :: cinv(ndi,ndi)
-
-
-CALL matinv3d(c,cinv,ndi)
-
-DO i1=1,ndi
-  DO j1=1,ndi
-    pkvol(i1,j1)=pv*cinv(i1,j1)
-  END DO
-END DO
-
-RETURN
-END SUBROUTINE pk2vol
+END SUBROUTINE anisomat_discrete
 SUBROUTINE anisomat(sseaniso,daniso,diso,k1,k2,kdisp,i4,i1)
 !
 use global
@@ -1230,18 +1092,6 @@ diso(3)=d2ud2i1
 
 RETURN
 END SUBROUTINE anisomat
-SUBROUTINE sdvread(statev)
-use global
-implicit none
-!>    VISCOUS DISSIPATION: READ STATE VARS
-DOUBLE PRECISION, INTENT(IN)             :: statev(nsdv)
-
-
-
-
-RETURN
-
-END SUBROUTINE sdvread
 SUBROUTINE isomat(sseiso,diso,c10,c01,cbari1,cbari2)
 
 
@@ -1269,34 +1119,217 @@ diso(5)=zero
 
 RETURN
 END SUBROUTINE isomat
-SUBROUTINE sigvol(svol,pv,unit2,ndi)
+SUBROUTINE sigiso(siso,sfic,pe,ndi)
 
 
 
-!>    VOLUMETRIC CAUCHY STRESS
+!>    ISOCHORIC CAUCHY STRESS
+use global
+IMPLICIT NONE
+
+INTEGER, INTENT(IN OUT)                  :: ndi
+DOUBLE PRECISION, INTENT(IN OUT)         :: siso(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN OUT)         :: sfic(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN OUT)         :: pe(ndi,ndi,ndi,ndi)
+
+
+CALL contraction42(siso,pe,sfic,ndi)
+
+RETURN
+END SUBROUTINE sigiso
+SUBROUTINE bangle(ang,f,mf,noel,pdir,ndi)
+
+!>    ANGLE BETWEEN FILAMENT AND PREFERED DIRECTION
 
 use global
 IMPLICIT NONE
 
 INTEGER, INTENT(IN)                      :: ndi
-DOUBLE PRECISION, INTENT(OUT)            :: svol(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: pv
-DOUBLE PRECISION, INTENT(IN)             :: unit2(ndi,ndi)
+DOUBLE PRECISION, INTENT(OUT)            :: ang
+DOUBLE PRECISION, INTENT(IN OUT)         :: f(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN)             :: mf(ndi)
+DOUBLE PRECISION, INTENT(IN OUT)         :: pdir(ndi)
+INTEGER, INTENT(IN OUT)                  :: noel
+!
+!
+INTEGER :: inoel,i,j
+DOUBLE PRECISION :: dnorm, mfa(ndi),aux
+DOUBLE PRECISION :: c(ndi,ndi),egvc(ndi,ndi),egvl(ndi)
+!
+inoel=0
+i=0
+!DO i=1,nelem
+!               ELEMENT IDENTIFICATION
+!  IF(noel == INT(prefdir(i,1))) THEN
+!    inoel=i
+!  END IF
+!END DO
+!
+!DO i=1,ndi
+!  j=i+1
+!       PREFERED ORIENTATION  ORIENTATION NORMALIZED
+!  pdir(i)=prefdir(inoel,j)
+!END DO
+!        ALTERNATIVE APPROACH: BUNDLES FOLLOW PRINCIPAL DIRECTIONS
+!c=matmul(transpose(f),f)
+!CALL spectral(c,egvl,egvc)
+!       WRITE(*,*) EGVC
+!pdir(1)=egvc(1,1)
+!pdir(2)=egvc(2,1)
+!pdir(3)=egvc(3,1)
+!        END OF ALTERNATIVE
+
+!     PREFERED ORIENTATION
+dnorm=dot_product(pdir,pdir)
+dnorm=DSQRT(dnorm)
+!     PREFERED ORIENTATION  NORMALIZED
+pdir=pdir/dnorm
+
+!       FILAMENT ORIENTATION
+mfa=mf
+dnorm=dot_product(mfa,mfa)
+dnorm=dsqrt(dnorm)
+
+!       FILAMENT ORIENTATION  NORMALIZED
+mfa=mfa/dnorm
+!        ANGLE BETWEEN PREFERED ORIENTATION AND FILAMENT - BANGLE
+aux=dot_product(mfa,pdir)
+!        if AUX.GT.ONE
+!        endif
+!        write(*,*) aux
+ang=acos(aux)
+
+RETURN
+END SUBROUTINE bangle
+
+SUBROUTINE csfibfic(cfic,rho,dw,ddw,m,rw,ndi)
+use global
+IMPLICIT NONE
+
+INTEGER, INTENT(IN)                      :: ndi
+DOUBLE PRECISION, INTENT(OUT)            :: cfic(ndi,ndi,ndi,ndi)
+DOUBLE PRECISION, INTENT(IN)             :: rho
+DOUBLE PRECISION, INTENT(IN)             :: dw
+DOUBLE PRECISION, INTENT(IN)             :: ddw
+DOUBLE PRECISION, INTENT(IN)             :: m(ndi)
+DOUBLE PRECISION, INTENT(IN)             :: rw
 
 
 
-INTEGER :: i1,j1
+INTEGER :: i1,j1,k1,l1
+
+DOUBLE PRECISION :: aux
 
 
-
+aux = rho*rw*ddw
 DO i1=1,ndi
   DO j1=1,ndi
-    svol(i1,j1)=pv*unit2(i1,j1)
+    DO k1=1,ndi
+      DO l1=1,ndi
+        cfic(i1,j1,k1,l1)=aux*m(i1)*m(j1)*m(k1)*m(l1)
+      END DO
+    END DO
   END DO
 END DO
 
 RETURN
-END SUBROUTINE sigvol
+END SUBROUTINE csfibfic
+SUBROUTINE hvread(hv,statev,v1,ndi)
+
+
+
+!>    VISCOUS DISSIPATION: READ STATE VARS
+use global
+IMPLICIT NONE
+
+INTEGER, INTENT(IN OUT)                  :: ndi
+
+DOUBLE PRECISION, INTENT(OUT)            :: hv(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN)             :: statev(nsdv)
+INTEGER, INTENT(IN)                      :: v1
+
+
+
+INTEGER :: pos
+
+
+pos=9*v1-9
+hv(1,1)=statev(1+pos)
+hv(1,2)=statev(2+pos)
+hv(1,3)=statev(3+pos)
+hv(2,1)=statev(4+pos)
+hv(2,2)=statev(5+pos)
+hv(2,3)=statev(6+pos)
+hv(3,1)=statev(7+pos)
+hv(3,2)=statev(8+pos)
+hv(3,3)=statev(9+pos)
+
+RETURN
+
+END SUBROUTINE hvread
+SUBROUTINE vol(ssev,pv,ppv,k,det)
+
+! Code converted using TO_F90 by Alan Miller
+! Date: 2020-12-12  Time: 12:08:12
+
+!>     VOLUMETRIC CONTRIBUTION :STRAIN ENERGY FUNCTION AND DERIVATIVES
+use global
+implicit none
+
+
+DOUBLE PRECISION :: g, aux
+DOUBLE PRECISION, INTENT(OUT)            :: ssev
+DOUBLE PRECISION, INTENT(OUT)            :: pv
+DOUBLE PRECISION, INTENT(OUT)            :: ppv
+DOUBLE PRECISION, INTENT(IN)             :: k
+DOUBLE PRECISION, INTENT(IN)             :: det
+
+
+g=(one/four)*(det*det-one-two*LOG(det))
+
+ssev=k*g
+
+pv=k*(one/two)*(det-one/det)
+aux=k*(one/two)*(one+one/(det*det))
+ppv=pv+det*aux
+
+RETURN
+END SUBROUTINE vol
+SUBROUTINE matinv3d(a,a_inv,ndi)
+!>    INVERSE OF A 3X3 MATRIX
+!     RETURN THE INVERSE OF A(3,3) - A_INV
+use global
+
+INTEGER, INTENT(IN OUT)                  :: ndi
+DOUBLE PRECISION, INTENT(IN)             :: a(ndi,ndi)
+DOUBLE PRECISION, INTENT(OUT)            :: a_inv(ndi,ndi)
+
+DOUBLE PRECISION :: det_a,det_a_inv
+
+det_a = a(1,1)*(a(2,2)*a(3,3) - a(3,2)*a(2,3)) -  &
+    a(2,1)*(a(1,2)*a(3,3) - a(3,2)*a(1,3)) +  &
+    a(3,1)*(a(1,2)*a(2,3) - a(2,2)*a(1,3))
+
+IF (det_a <= 0.d0) THEN
+  WRITE(*,*) 'WARNING: SUBROUTINE MATINV3D:'
+  WRITE(*,*) 'WARNING: DET OF MAT=',det_a
+  RETURN
+END IF
+
+det_a_inv = 1.d0/det_a
+
+a_inv(1,1) = det_a_inv*(a(2,2)*a(3,3)-a(3,2)*a(2,3))
+a_inv(1,2) = det_a_inv*(a(3,2)*a(1,3)-a(1,2)*a(3,3))
+a_inv(1,3) = det_a_inv*(a(1,2)*a(2,3)-a(2,2)*a(1,3))
+a_inv(2,1) = det_a_inv*(a(3,1)*a(2,3)-a(2,1)*a(3,3))
+a_inv(2,2) = det_a_inv*(a(1,1)*a(3,3)-a(3,1)*a(1,3))
+a_inv(2,3) = det_a_inv*(a(2,1)*a(1,3)-a(1,1)*a(2,3))
+a_inv(3,1) = det_a_inv*(a(2,1)*a(3,2)-a(3,1)*a(2,2))
+a_inv(3,2) = det_a_inv*(a(3,1)*a(1,2)-a(1,1)*a(3,2))
+a_inv(3,3) = det_a_inv*(a(1,1)*a(2,2)-a(2,1)*a(1,2))
+
+RETURN
+END SUBROUTINE matinv3d
 !>********************************************************************
 !> Record of revisions:                                              |
 !>        Date        Programmer        Description of change        |
@@ -1675,6 +1708,1089 @@ END SUBROUTINE umat
 !--------------------------- END OF UMAT ------------------------------
 !----------------------------------------------------------------------
 
+SUBROUTINE fibdir(fib,st0,st,noel,ndi,vorif,vd,distgr,dfgrd1)
+
+
+DOUBLE PRECISION, INTENT(IN)             :: fib(NE,4)
+DOUBLE PRECISION, INTENT(OUT)            :: st0(3,3)
+DOUBLE PRECISION, INTENT(OUT)            :: st(3,3)
+INTEGER, INTENT(IN OUT)                  :: noel
+INTEGER, INTENT(IN)                      :: ndi
+DOUBLE PRECISION, INTENT(OUT)            :: vorif(3)
+DOUBLE PRECISION, INTENT(OUT)            :: vd(3)
+DOUBLE PRECISION, INTENT(IN OUT)         :: distgr(3,3)
+DOUBLE PRECISION, INTENT(IN)             :: dfgrd1(3,3)
+
+
+INTEGER :: inoel,i,j,i1,j1
+DOUBLE PRECISION :: sum1, dnorm
+
+
+
+inoel=0
+i=0
+DO i=1,nelem
+!               ELEMENT IDENTIFICATION
+  IF(noel == INT(fib(i,1))) THEN
+    inoel=i
+  END IF
+END DO
+
+!     FIB - FIBER ORIENTATION
+dnorm=DSQRT(fib(inoel,2)*fib(inoel,2)+ fib(inoel,3)*fib(inoel,3)+  &
+    fib(inoel,4)*fib(inoel,4))
+
+!       UNDERFORMED FIBER ORIENTATION TENSOR
+
+DO i1=1,ndi
+  j1=i1+1
+!       FIBER ORIENTATION NORMALIZED VECTOR - FAMILY 1
+  vorif(i1)=fib(inoel,j1)/dnorm
+END DO
+
+
+DO i=1,ndi
+  sum1=zero
+  DO j=1,ndi
+    sum1=sum1+dfgrd1(i,j)*vorif(j)
+  END DO
+!     FIBER DIRECTIONS IN THE DEFORMED CONFIGURATION
+!               -FAMILY 1
+  vd(i)=sum1
+END DO
+dnorm=DSQRT(vd(1)*vd(1)+ vd(2)*vd(2)+  &
+    vd(3)*vd(3))
+!           COSINE OF THE ANGLE BETWEEN FIBERS
+
+
+!--------------------------------------------------------------------------
+DO i=1,ndi
+  DO j=1,ndi
+!       STRUCTURAL TENSOR - FAMILY 1
+    st0(i,j)=vorif(i)*vorif(j)
+  END DO
+END DO
+
+!       STRUCTURE TENSOR IN THE DEFORMED CONFIGURATION - FAMILY 1
+st=matmul(st0,transpose(distgr))
+st=matmul(distgr,st)
+
+
+RETURN
+END SUBROUTINE fibdir
+SUBROUTINE pk2vol(pkvol,pv,c,ndi)
+
+
+
+!>    VOLUMETRIC PK2 STRESS
+use global
+IMPLICIT NONE
+
+INTEGER, INTENT(IN OUT)                      :: ndi
+DOUBLE PRECISION, INTENT(OUT)            :: pkvol(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN)             :: pv
+DOUBLE PRECISION, INTENT(IN OUT)         :: c(ndi,ndi)
+
+
+INTEGER :: i1,j1
+DOUBLE PRECISION :: cinv(ndi,ndi)
+
+
+CALL matinv3d(c,cinv,ndi)
+
+DO i1=1,ndi
+  DO j1=1,ndi
+    pkvol(i1,j1)=pv*cinv(i1,j1)
+  END DO
+END DO
+
+RETURN
+END SUBROUTINE pk2vol
+SUBROUTINE push2(sig,pk,f,det,ndi)
+
+
+
+!>        PIOLA TRANSFORMATION
+!>      INPUT:
+!>       PK - 2ND PIOLA KIRCHOOF STRESS TENSOR
+!>       F - DEFORMATION GRADIENT
+!>       DET - DEFORMATION DETERMINANT
+!>      OUTPUT:
+!>       SIG - CAUCHY STRESS TENSOR
+use global
+IMPLICIT NONE
+
+INTEGER, INTENT(IN)                      :: ndi
+DOUBLE PRECISION, INTENT(OUT)            :: sig(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN)             :: pk(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN)             :: f(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN OUT)         :: det
+
+
+INTEGER :: i1,j1,ii1,jj1
+
+
+DOUBLE PRECISION :: aux
+
+DO i1=1,ndi
+  DO j1=1,ndi
+    aux=zero
+    DO ii1=1,ndi
+      DO jj1=1,ndi
+        aux=aux+(det**(-one))*f(i1,ii1)*f(j1,jj1)*pk(ii1,jj1)
+      END DO
+    END DO
+    sig(i1,j1)=aux
+  END DO
+END DO
+
+RETURN
+END SUBROUTINE push2
+SUBROUTINE contraction24(s,LT,rt,ndi)
+
+
+
+!>       DOUBLE CONTRACTION BETWEEN 4TH ORDER AND 2ND ORDER  TENSOR
+!>      INPUT:
+!>       LT - RIGHT 2ND ORDER TENSOR
+!>       RT - LEFT  4TH ODER TENSOR
+!>      OUTPUT:
+!>       S - DOUBLE CONTRACTED TENSOR (2ND ORDER)
+use global
+IMPLICIT NONE
+
+INTEGER, INTENT(IN)                      :: ndi
+DOUBLE PRECISION, INTENT(OUT)            :: s(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN)             :: lt(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN)             :: rt(ndi,ndi,ndi,ndi)
+
+
+
+INTEGER :: i1,j1,k1,l1
+
+
+DOUBLE PRECISION :: aux
+
+
+
+DO k1=1,ndi
+  DO l1=1,ndi
+    aux=zero
+    DO i1=1,ndi
+      DO j1=1,ndi
+        aux=aux+lt(k1,l1)*rt(i1,j1,k1,l1)
+      END DO
+    END DO
+    s(k1,l1)=aux
+  END DO
+END DO
+RETURN
+END SUBROUTINE contraction24
+SUBROUTINE csisomatfic(cisomatfic,cmisomatfic,distgr,det,ndi)
+
+
+
+!>    ISOTROPIC MATRIX: SPATIAL 'FICTICIOUS' ELASTICITY TENSOR
+use global
+IMPLICIT NONE
+
+INTEGER, INTENT(IN OUT)                  :: ndi
+DOUBLE PRECISION, INTENT(IN OUT)         :: cisomatfic(ndi,ndi,ndi,ndi)
+DOUBLE PRECISION, INTENT(IN OUT)         :: cmisomatfic(ndi,ndi,ndi,ndi)
+DOUBLE PRECISION, INTENT(IN OUT)         :: distgr(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN OUT)         :: det
+
+
+
+call push4(cisomatfic,cmisomatfic,distgr,det,ndi)
+
+RETURN
+END SUBROUTINE csisomatfic
+SUBROUTINE pinvariants(a,inv4,ndi,st,lambda,barlambda,det)
+!
+use global
+implicit none
+!>    AND 4TH PSEUDO-INVARIANTS OF A TENSOR
+INTEGER, INTENT(IN)                      :: ndi
+DOUBLE PRECISION, INTENT(IN)             :: a(ndi,ndi)
+DOUBLE PRECISION, INTENT(OUT)            :: inv4
+DOUBLE PRECISION, INTENT(IN)             :: st(ndi,ndi)
+DOUBLE PRECISION, INTENT(OUT)            :: lambda
+DOUBLE PRECISION, INTENT(OUT)            :: barlambda
+DOUBLE PRECISION, INTENT(IN)             :: det
+
+
+INTEGER :: i,j
+DOUBLE PRECISION :: scale1
+
+
+inv4=zero
+DO i=1,ndi
+  DO j=1, ndi
+    inv4=inv4+a(i,j)*st(i,j)
+  END DO
+END DO
+!     STRETCH
+scale1=det**(-one /three)
+barlambda=DSQRT(inv4)
+lambda=barlambda/scale1
+
+RETURN
+END SUBROUTINE pinvariants
+SUBROUTINE density(rho,ang,bb,erfi)
+
+!>    SINGLE FILAMENT: DENSITY FUNCTION VALUE
+use global
+IMPLICIT NONE
+
+DOUBLE PRECISION, INTENT(OUT)            :: rho
+DOUBLE PRECISION, INTENT(IN OUT)         :: ang
+DOUBLE PRECISION, INTENT(IN OUT)         :: bb
+DOUBLE PRECISION, INTENT(IN OUT)         :: erfi
+
+
+
+DOUBLE PRECISION :: pi,aux1,aux2
+
+pi=four*ATAN(one)
+
+aux1=SQRT(bb/(two*pi))
+aux2=DEXP(bb*(COS(two*ang)+one))
+rho=four*aux1*aux2*(erfi**(-one))
+
+!alternative
+! aux1 = four*sqrt(bb/(two*pi))
+! aux2 = dexp(two*bb*(cos(ang))**two)
+! aux3 = erfi**(-one)
+! rho  = aux1*aux2*aux3
+
+RETURN
+END SUBROUTINE density
+SUBROUTINE xit()
+
+
+
+CALL EXIT()
+
+END SUBROUTINE
+SUBROUTINE setvol(cvol,pv,ppv,unit2,unit4s,ndi)
+
+
+
+!>    VOLUMETRIC SPATIAL ELASTICITY TENSOR
+use global
+IMPLICIT NONE
+
+INTEGER, INTENT(IN)                      :: ndi
+DOUBLE PRECISION, INTENT(OUT)            :: cvol(ndi,ndi,ndi,ndi)
+DOUBLE PRECISION, INTENT(IN OUT)         :: pv
+DOUBLE PRECISION, INTENT(IN OUT)         :: ppv
+DOUBLE PRECISION, INTENT(IN OUT)         :: unit2(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN OUT)         :: unit4s(ndi,ndi,ndi,ndi)
+
+
+INTEGER :: i1,j1,k1,l1
+
+
+
+DO i1 = 1, ndi
+  DO j1 = 1, ndi
+    DO k1 = 1, ndi
+      DO l1 = 1, ndi
+        cvol(i1,j1,k1,l1)= ppv*unit2(i1,j1)*unit2(k1,l1)  &
+            -two*pv*unit4s(i1,j1,k1,l1)
+      END DO
+    END DO
+  END DO
+END DO
+
+RETURN
+END SUBROUTINE setvol
+SUBROUTINE cmatanisomatfic(cmanisomatfic,m0,daniso,unit2,det,ndi)
+!
+use global
+IMPLICIT NONE
+!
+!>    ANISOTROPIC MATRIX: MATERIAL 'FICTICIOUS' ELASTICITY TENSOR
+INTEGER, INTENT(IN)                      :: ndi
+DOUBLE PRECISION, INTENT(IN OUT)         :: cmanisomatfic(ndi,ndi,ndi,ndi)
+DOUBLE PRECISION, INTENT(IN OUT)         :: m0(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN)             :: daniso(3)
+DOUBLE PRECISION, INTENT(IN OUT)         :: unit2(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN OUT)         :: det
+!
+INTEGER :: i,j,k,l
+DOUBLE PRECISION :: cinv4(ndi,ndi,ndi,ndi),cinv14(ndi,ndi,ndi,ndi)
+DOUBLE PRECISION :: d2udi4,d2udi1di4
+DOUBLE PRECISION :: imm(ndi,ndi,ndi,ndi),mmi(ndi,ndi,ndi,ndi),  &
+    mm0(ndi,ndi,ndi,ndi)
+
+!-----------------------------------------------------------------------------
+!2ND DERIVATIVE OF SSEANISO IN ORDER TO I4
+d2udi4=daniso(2)
+!2ND DERIVATIVE OF SSEANISO IN ORDER TO I1 AND I4
+d2udi1di4=daniso(3)
+
+CALL tensorprod2(m0,m0,mm0,ndi)
+CALL tensorprod2(unit2,m0,imm,ndi)
+CALL tensorprod2(m0,unit2,mmi,ndi)
+
+DO i=1,ndi
+  DO j=1,ndi
+    DO k=1,ndi
+      DO l=1,ndi
+        cinv4(i,j,k,l)=d2udi4*mm0(i,j,k,l)
+        cinv14(i,j,k,l)=d2udi1di4*(imm(i,j,k,l)+mmi(i,j,k,l))
+        cmanisomatfic(i,j,k,l)=four*(cinv4(i,j,k,l)+cinv14(i,j,k,l))
+      END DO
+    END DO
+  END DO
+END DO
+
+RETURN
+END SUBROUTINE cmatanisomatfic
+SUBROUTINE push4(spatial,mat,f,det,ndi)
+
+
+
+!>        PIOLA TRANSFORMATION
+!>      INPUT:
+!>       MAT - MATERIAL ELASTICITY TENSOR
+!>       F - DEFORMATION GRADIENT
+!>       DET - DEFORMATION DETERMINANT
+!>      OUTPUT:
+!>       SPATIAL - SPATIAL ELASTICITY TENSOR
+use global
+IMPLICIT NONE
+
+INTEGER, INTENT(IN)                      :: ndi
+DOUBLE PRECISION, INTENT(OUT)            :: spatial(ndi,ndi,ndi,ndi)
+DOUBLE PRECISION, INTENT(IN OUT)         :: mat(ndi,ndi,ndi,ndi)
+DOUBLE PRECISION, INTENT(IN OUT)         :: f(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN OUT)         :: det
+
+
+INTEGER :: i1,j1,k1,l1,ii1,jj1,kk1,ll1
+
+
+DOUBLE PRECISION :: aux
+
+
+DO i1=1,ndi
+  DO j1=1,ndi
+    DO k1=1,ndi
+      DO l1=1,ndi
+        aux=zero
+        DO ii1=1,ndi
+          DO jj1=1,ndi
+            DO kk1=1,ndi
+              DO ll1=1,ndi
+                aux=aux+(det**(-one))* f(i1,ii1)*f(j1,jj1)*  &
+                    f(k1,kk1)*f(l1,ll1)*mat(ii1,jj1,kk1,ll1)
+              END DO
+            END DO
+          END DO
+        END DO
+        spatial(i1,j1,k1,l1)=aux
+      END DO
+    END DO
+  END DO
+END DO
+
+RETURN
+END SUBROUTINE push4
+SUBROUTINE pk2isomatfic(fic,diso,cbar,cbari1,unit2,ndi)
+
+
+
+!>     ISOTROPIC MATRIX: 2PK 'FICTICIOUS' STRESS TENSOR
+!      INPUT:
+!       DISO - STRAIN-ENERGY DERIVATIVES
+!       CBAR - DEVIATORIC LEFT CAUCHY-GREEN TENSOR
+!       CBARI1,CBARI2 - CBAR INVARIANTS
+!       UNIT2 - 2ND ORDER IDENTITY TENSOR
+!      OUTPUT:
+!       FIC - 2ND PIOLA KIRCHOOF 'FICTICIOUS' STRESS TENSOR
+use global
+IMPLICIT NONE
+
+INTEGER, INTENT(IN)                      :: ndi
+DOUBLE PRECISION, INTENT(OUT)            :: fic(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN)             :: diso(5)
+DOUBLE PRECISION, INTENT(IN)             :: cbar(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN)             :: cbari1
+DOUBLE PRECISION, INTENT(IN)             :: unit2(ndi,ndi)
+
+
+
+INTEGER :: i1,j1
+
+DOUBLE PRECISION :: dudi1,dudi2
+DOUBLE PRECISION :: aux1,aux2
+
+dudi1=diso(1)
+dudi2=diso(2)
+
+aux1=two*(dudi1+cbari1*dudi2)
+aux2=-two*dudi2
+
+DO i1=1,ndi
+  DO j1=1,ndi
+    fic(i1,j1)=aux1*unit2(i1,j1)+aux2*cbar(i1,j1)
+  END DO
+END DO
+
+RETURN
+END SUBROUTINE pk2isomatfic
+SUBROUTINE spectral(a,d,v)
+
+
+
+!>    EIGENVALUES AND EIGENVECTOR OF A 3X3 MATRIX
+!     THIS SUBROUTINE CALCULATES THE EIGENVALUES AND EIGENVECTORS OF
+!     A SYMMETRIC 3X3 MATRIX A.
+
+!     THE OUTPUT CONSISTS OF A VECTOR D CONTAINING THE THREE
+!     EIGENVALUES IN ASCENDING ORDER, AND A MATRIX V WHOSE
+!     COLUMNS CONTAIN THE CORRESPONDING EIGENVECTORS.
+
+use global
+
+DOUBLE PRECISION, INTENT(IN OUT)         :: a(3,3)
+DOUBLE PRECISION                         :: e(3,3)
+DOUBLE PRECISION, INTENT(IN OUT)         :: d(3)
+DOUBLE PRECISION, INTENT(IN OUT)         :: v(3,3)
+
+INTEGER :: nrot
+INTEGER :: np=3
+
+
+
+e = a
+
+CALL jacobi(e,3,np,d,v,nrot)
+CALL eigsrt(d,v,3,np)
+
+RETURN
+END SUBROUTINE spectral
+
+!***********************************************************************
+
+SUBROUTINE jacobi(a,n,np,d,v,nrot)
+
+! COMPUTES ALL EIGENVALUES AND EIGENVECTORS OF A REAL SYMMETRIC
+!  MATRIX A, WHICH IS OF SIZE N BY N, STORED IN A PHYSICAL
+!  NP BY NP ARRAY.  ON OUTPUT, ELEMENTS OF A ABOVE THE DIAGONAL
+!  ARE DESTROYED, BUT THE DIAGONAL AND SUB-DIAGONAL ARE UNCHANGED
+!  AND GIVE FULL INFORMATION ABOUT THE ORIGINAL SYMMETRIC MATRIX.
+!  VECTOR D RETURNS THE EIGENVALUES OF A IN ITS FIRST N ELEMENTS.
+!  V IS A MATRIX WITH THE SAME LOGICAL AND PHYSICAL DIMENSIONS AS
+!  A WHOSE COLUMNS CONTAIN, UPON OUTPUT, THE NORMALIZED
+!  EIGENVECTORS OF A.  NROT RETURNS THE NUMBER OF JACOBI ROTATION
+!  WHICH WERE REQUIRED.
+
+! THIS SUBROUTINE IS TAKEN FROM 'NUMERICAL RECIPES.'
+use global
+IMPLICIT NONE
+
+INTEGER, INTENT(IN OUT)                  :: np
+DOUBLE PRECISION, INTENT(IN OUT)         :: a(np,np)
+INTEGER, INTENT(IN)                      :: n
+DOUBLE PRECISION, INTENT(OUT)            :: d(np)
+DOUBLE PRECISION, INTENT(OUT)            :: v(np,np)
+INTEGER, INTENT(OUT)                     :: nrot
+
+INTEGER :: ip,iq,  i,j
+INTEGER, PARAMETER :: nmax=100
+
+DOUBLE PRECISION :: b(nmax),z(nmax), sm,tresh,g,t,h,theta,s,c,tau
+
+
+! INITIALIZE V TO THE IDENTITY MATRIX
+DO i=1,3
+  v(i,i)=one
+  DO j=1,3
+    IF (i /= j)THEN
+      v(i,j)=zero
+    END IF
+  END DO
+END DO
+! INITIALIZE B AND D TO THE DIAGONAL OF A, AND Z TO ZERO.
+!  THE VECTOR Z WILL ACCUMULATE TERMS OF THE FORM T*A_PQ AS
+!  IN EQUATION (11.1.14)
+
+DO ip = 1,n
+  b(ip) = a(ip,ip)
+  d(ip) = b(ip)
+  z(ip) = 0.d0
+END DO
+
+
+! BEGIN ITERATION
+
+nrot = 0
+DO i=1,50
+  
+!         SUM OFF-DIAGONAL ELEMENTS
+  
+  sm = 0.d0
+  DO ip=1,n-1
+    DO iq=ip+1,n
+      sm = sm + DABS(a(ip,iq))
+    END DO
+  END DO
+  
+!          IF SM = 0., THEN RETURN.  THIS IS THE NORMAL RETURN,
+!          WHICH RELIES ON QUADRATIC CONVERGENCE TO MACHINE
+!          UNDERFLOW.
+  
+  IF (sm == 0.d0) RETURN
+  
+!          IN THE FIRST THREE SWEEPS CARRY OUT THE PQ ROTATION ONLY IF
+!           |A_PQ| > TRESH, WHERE TRESH IS SOME THRESHOLD VALUE,
+!           SEE EQUATION (11.1.25).  THEREAFTER TRESH = 0.
+  
+  IF (i < 4) THEN
+    tresh = 0.2D0*sm/n**2
+  ELSE
+    tresh = 0.d0
+  END IF
+  
+  DO ip=1,n-1
+    DO iq=ip+1,n
+      g = 100.d0*DABS(a(ip,iq))
+      
+!              AFTER FOUR SWEEPS, SKIP THE ROTATION IF THE
+!               OFF-DIAGONAL ELEMENT IS SMALL.
+      
+      IF ((i > 4).AND.(DABS(d(ip))+g == DABS(d(ip)))  &
+            .AND.(DABS(d(iq))+g == DABS(d(iq)))) THEN
+        a(ip,iq) = 0.d0
+      ELSE IF (DABS(a(ip,iq)) > tresh) THEN
+        h = d(iq) - d(ip)
+        IF (DABS(h)+g == DABS(h)) THEN
+          
+!                  T = 1./(2.*THETA), EQUATION (11.1.10)
+          
+          t =a(ip,iq)/h
+        ELSE
+          theta = 0.5D0*h/a(ip,iq)
+          t =1.d0/(DABS(theta)+DSQRT(1.d0+theta**2.d0))
+          IF (theta < 0.d0) t = -t
+        END IF
+        c = 1.d0/DSQRT(1.d0 + t**2.d0)
+        s = t*c
+        tau = s/(1.d0 + c)
+        h = t*a(ip,iq)
+        z(ip) = z(ip) - h
+        z(iq) = z(iq) + h
+        d(ip) = d(ip) - h
+        d(iq) = d(iq) + h
+        a(ip,iq) = 0.d0
+        
+!               CASE OF ROTATIONS 1 <= J < P
+        
+        DO j=1,ip-1
+          g = a(j,ip)
+          h = a(j,iq)
+          a(j,ip) = g - s*(h + g*tau)
+          a(j,iq) = h + s*(g - h*tau)
+        END DO
+        
+!                CASE OF ROTATIONS P < J < Q
+        
+        DO j=ip+1,iq-1
+          g = a(ip,j)
+          h = a(j,iq)
+          a(ip,j) = g - s*(h + g*tau)
+          a(j,iq) = h + s*(g - h*tau)
+        END DO
+        
+!                 CASE OF ROTATIONS Q < J <= N
+        
+        DO j=iq+1,n
+          g = a(ip,j)
+          h = a(iq,j)
+          a(ip,j) = g - s*(h + g*tau)
+          a(iq,j) = h + s*(g - h*tau)
+        END DO
+        DO j = 1,n
+          g = v(j,ip)
+          h = v(j,iq)
+          v(j,ip) = g - s*(h + g*tau)
+          v(j,iq) = h + s*(g - h*tau)
+        END DO
+        nrot = nrot + 1
+      END IF
+    END DO
+  END DO
+  
+!          UPDATE D WITH THE SUM OF T*A_PQ, AND REINITIALIZE Z
+  
+  DO ip=1,n
+    b(ip) = b(ip) + z(ip)
+    d(ip) = b(ip)
+    z(ip) = 0.d0
+  END DO
+END DO
+
+! IF THE ALGORITHM HAS REACHED THIS STAGE, THEN THERE
+!  ARE TOO MANY SWEEPS.  PRINT A DIAGNOSTIC AND CUT THE
+!  TIME INCREMENT.
+
+WRITE (*,'(/1X,A/)') '50 ITERATIONS IN JACOBI SHOULD NEVER HAPPEN'
+
+RETURN
+END SUBROUTINE jacobi
+
+!**********************************************************************
+
+SUBROUTINE eigsrt(d,v,n,np)
+
+!     GIVEN THE EIGENVALUES D AND EIGENVECTORS V AS OUTPUT FROM
+!     JACOBI, THIS SUBROUTINE SORTS THE EIGENVALUES INTO ASCENDING
+!     ORDER AND REARRANGES THE COLMNS OF V ACCORDINGLY.
+
+!     THE SUBROUTINE WAS TAKEN FROM 'NUMERICAL RECIPES.'
+use global
+
+DOUBLE PRECISION, INTENT(IN OUT)         :: d(np)
+DOUBLE PRECISION, INTENT(IN OUT)         :: v(np,np)
+INTEGER, INTENT(IN)                      :: n
+INTEGER, INTENT(IN OUT)                  :: np
+
+
+INTEGER :: i,j,k
+
+DOUBLE PRECISION :: p
+
+DO i=1,n-1
+  k = i
+  p = d(i)
+  DO j=i+1,n
+    IF (d(j) >= p) THEN
+      k = j
+      p = d(j)
+    END IF
+  END DO
+  IF (k /= i) THEN
+    d(k) = d(i)
+    d(i) = p
+    DO j=1,n
+      p = v(j,i)
+      v(j,i) = v(j,k)
+      v(j,k) = p
+    END DO
+  END IF
+END DO
+
+RETURN
+END SUBROUTINE eigsrt
+SUBROUTINE sigfibfic(sfic,rho,dw,m,rw,ndi)
+!>    SINGLE FIBER:  'FICTICIOUS' CAUCHY STRESS
+use global
+IMPLICIT NONE
+
+INTEGER, INTENT(IN)                      :: ndi !number of dimensions
+DOUBLE PRECISION, INTENT(OUT)            :: sfic(ndi,ndi) !ficticious cauchy stress 
+DOUBLE PRECISION, INTENT(IN)             :: rho  !angular density at m
+DOUBLE PRECISION, INTENT(IN)             :: dw !derivative of fiber strain energy
+DOUBLE PRECISION, INTENT(IN)             :: m(ndi) !direction vector
+DOUBLE PRECISION, INTENT(IN)             :: rw ! integration weight
+
+
+INTEGER :: i1,j1
+
+DOUBLE PRECISION :: aux
+
+aux = rho*dw*rw
+DO i1=1,ndi
+  DO j1=1,ndi
+    sfic(i1,j1)=aux*m(i1)*m(j1)
+  END DO
+END DO
+
+RETURN
+END SUBROUTINE sigfibfic
+SUBROUTINE setjr(cjr,sigma,unit2,ndi)
+
+
+use global
+IMPLICIT NONE
+!>    JAUMAN RATE CONTRIBUTION FOR THE SPATIAL ELASTICITY TENSOR
+
+INTEGER, INTENT(IN)                      :: ndi
+DOUBLE PRECISION, INTENT(OUT)            :: cjr(ndi,ndi,ndi,ndi)
+DOUBLE PRECISION, INTENT(IN OUT)         :: sigma(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN OUT)         :: unit2(ndi,ndi)
+
+
+
+INTEGER :: i1,j1,k1,l1
+
+
+DO i1 = 1, ndi
+  DO j1 = 1, ndi
+    DO k1 = 1, ndi
+      DO l1 = 1, ndi
+        
+        cjr(i1,j1,k1,l1)= (one/two)*(unit2(i1,k1)*sigma(j1,l1)  &
+            +sigma(i1,k1)*unit2(j1,l1)+unit2(i1,l1)*sigma(j1,k1)  &
+            +sigma(i1,l1)*unit2(j1,k1))
+      END DO
+    END DO
+  END DO
+END DO
+
+RETURN
+END SUBROUTINE setjr
+SUBROUTINE cmatisomatfic(cmisomatfic,cbar,cbari1,cbari2,  &
+        diso,unit2,unit4,det,ndi)
+
+
+
+!>    ISOTROPIC MATRIX: MATERIAL 'FICTICIOUS' ELASTICITY TENSOR
+use global
+IMPLICIT NONE
+
+INTEGER, INTENT(IN)                      :: ndi
+DOUBLE PRECISION, INTENT(IN OUT)         :: cmisomatfic(ndi,ndi,ndi,ndi)
+DOUBLE PRECISION, INTENT(IN)             :: cbar(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN)             :: cbari1
+DOUBLE PRECISION, INTENT(IN OUT)         :: cbari2
+DOUBLE PRECISION, INTENT(IN)             :: diso(5)
+DOUBLE PRECISION, INTENT(IN)             :: unit2(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN OUT)         :: unit4(ndi,ndi,ndi,ndi)
+DOUBLE PRECISION, INTENT(IN OUT)         :: det
+
+
+
+INTEGER :: i1,j1,k1,l1
+    
+
+DOUBLE PRECISION :: dudi1,dudi2,d2ud2i1,d2ud2i2,d2udi1i2
+DOUBLE PRECISION :: aux,aux1,aux2,aux3,aux4
+DOUBLE PRECISION :: uij,ukl,cij,ckl
+
+dudi1=diso(1)
+dudi2=diso(2)
+d2ud2i1=diso(3)
+d2ud2i2=diso(4)
+d2udi1i2=diso(5)
+
+aux1=four*(d2ud2i1+two*cbari1*d2udi1i2+ dudi2+cbari1*cbari1*d2ud2i2)
+aux2=-four*(d2udi1i2+cbari1*d2ud2i2)
+aux3=four*d2ud2i2
+aux4=-four*dudi2
+
+DO i1=1,ndi
+  DO j1=1,ndi
+    DO k1=1,ndi
+      DO l1=1,ndi
+        uij=unit2(i1,j1)
+        ukl=unit2(k1,l1)
+        cij=cbar(i1,j1)
+        ckl=cbar(k1,l1)
+        aux=aux1*uij*ukl+ aux2*(uij*ckl+cij*ukl)+aux3*cij*ckl+  &
+            aux4*unit4(i1,j1,k1,l1)
+        cmisomatfic(i1,j1,k1,l1)=aux
+      END DO
+    END DO
+  END DO
+END DO
+
+RETURN
+END SUBROUTINE cmatisomatfic
+SUBROUTINE metvol(cvol,c,pv,ppv,det,ndi)
+
+
+
+!>    VOLUMETRIC MATERIAL ELASTICITY TENSOR
+use global
+IMPLICIT NONE
+
+INTEGER, INTENT(IN OUT)                      :: ndi
+DOUBLE PRECISION, INTENT(OUT)            :: cvol(ndi,ndi,ndi,ndi)
+DOUBLE PRECISION, INTENT(IN OUT)         :: c(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN OUT)         :: pv
+DOUBLE PRECISION, INTENT(IN OUT)         :: ppv
+DOUBLE PRECISION, INTENT(IN OUT)         :: det
+
+
+
+INTEGER :: i1,j1,k1,l1
+DOUBLE PRECISION :: cinv(ndi,ndi)
+
+
+CALL matinv3d(c,cinv,ndi)
+
+DO i1 = 1, ndi
+  DO j1 = 1, ndi
+    DO k1 = 1, ndi
+      DO l1 = 1, ndi
+        cvol(i1,j1,k1,l1)= det*ppv*cinv(i1,j1)*cinv(k1,l1)  &
+            -det*pv*(cinv(i1,k1)*cinv(j1,l1) +cinv(i1,l1)*cinv(j1,k1))
+      END DO
+    END DO
+  END DO
+END DO
+
+RETURN
+END SUBROUTINE metvol
+SUBROUTINE pk2iso(pkiso,pkfic,pl,det,ndi)
+
+
+
+!>    ISOCHORIC PK2 STRESS TENSOR
+use global
+IMPLICIT NONE
+
+INTEGER, INTENT(IN)                      :: ndi
+DOUBLE PRECISION, INTENT(OUT)            :: pkiso(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN OUT)         :: pkfic(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN OUT)         :: pl(ndi,ndi,ndi,ndi)
+DOUBLE PRECISION, INTENT(IN)             :: det
+
+
+
+INTEGER :: i1,j1
+
+DOUBLE PRECISION :: scale2
+
+CALL contraction42(pkiso,pl,pkfic,ndi)
+
+scale2=det**(-two/three)
+DO i1=1,ndi
+  DO j1=1,ndi
+    pkiso(i1,j1)=scale2*pkiso(i1,j1)
+  END DO
+END DO
+
+RETURN
+END SUBROUTINE pk2iso
+SUBROUTINE sigvol(svol,pv,unit2,ndi)
+
+
+
+!>    VOLUMETRIC CAUCHY STRESS
+
+use global
+IMPLICIT NONE
+
+INTEGER, INTENT(IN)                      :: ndi
+DOUBLE PRECISION, INTENT(OUT)            :: svol(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN)             :: pv
+DOUBLE PRECISION, INTENT(IN)             :: unit2(ndi,ndi)
+
+
+
+INTEGER :: i1,j1
+
+
+
+DO i1=1,ndi
+  DO j1=1,ndi
+    svol(i1,j1)=pv*unit2(i1,j1)
+  END DO
+END DO
+
+RETURN
+END SUBROUTINE sigvol
+SUBROUTINE metiso(cmiso,cmfic,pl,pkiso,pkfic,c,unit2,det,ndi)
+
+
+
+!>    ISOCHORIC MATERIAL ELASTICITY TENSOR
+use global
+IMPLICIT NONE
+
+INTEGER, INTENT(IN OUT)                      :: ndi
+DOUBLE PRECISION, INTENT(OUT)            :: cmiso(ndi,ndi,ndi,ndi)
+DOUBLE PRECISION, INTENT(IN OUT)         :: cmfic(ndi,ndi,ndi,ndi)
+DOUBLE PRECISION, INTENT(IN)             :: pl(ndi,ndi,ndi,ndi)
+DOUBLE PRECISION, INTENT(IN)             :: pkiso(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN)             :: pkfic(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN OUT)         :: c(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN OUT)         :: unit2(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN)             :: det
+
+
+
+INTEGER :: i1,j1,k1,l1
+DOUBLE PRECISION :: cisoaux(ndi,ndi,ndi,ndi), cisoaux1(ndi,ndi,ndi,ndi),  &
+    plt(ndi,ndi,ndi,ndi),cinv(ndi,ndi), pll(ndi,ndi,ndi,ndi)
+DOUBLE PRECISION :: trfic,xx,yy,zz, aux,aux1
+
+CALL matinv3d(c,cinv,ndi)
+cisoaux1=zero
+cisoaux=zero
+CALL contraction44(cisoaux1,pl,cmfic,ndi)
+DO i1=1,ndi
+  DO j1=1,ndi
+    DO k1=1,ndi
+      DO l1=1,ndi
+        plt(i1,j1,k1,l1)=pl(k1,l1,i1,j1)
+      END DO
+    END DO
+  END DO
+END DO
+
+CALL contraction44(cisoaux,cisoaux1,plt,ndi)
+
+trfic=zero
+aux=det**(-two/three)
+aux1=aux**two
+CALL contraction22(trfic,aux*pkfic,c,ndi)
+
+DO i1=1,ndi
+  DO j1=1,ndi
+    DO k1=1,ndi
+      DO l1=1,ndi
+        xx=aux1*cisoaux(i1,j1,k1,l1)
+        pll(i1,j1,k1,l1)=(one/two)*(cinv(i1,k1)*cinv(j1,l1)+  &
+            cinv(i1,l1)*cinv(j1,k1))- (one/three)*cinv(i1,j1)*cinv(k1,l1)
+        yy=trfic*pll(i1,j1,k1,l1)
+        zz=pkiso(i1,j1)*cinv(k1,l1)+cinv(i1,j1)*pkiso(k1,l1)
+        
+        cmiso(i1,j1,k1,l1)=xx+(two/three)*yy-(two/three)*zz
+      END DO
+    END DO
+  END DO
+END DO
+
+RETURN
+END SUBROUTINE metiso
+SUBROUTINE deffib(lambda,m,m0,f,ndi)
+
+
+
+!>      SINGLE FIBER: STRETCH AND DEFORMED DIRECTION
+use global
+IMPLICIT NONE
+
+INTEGER, INTENT(IN)                      :: ndi
+DOUBLE PRECISION, INTENT(OUT)            :: lambda
+DOUBLE PRECISION, INTENT(OUT)            :: m(ndi)
+DOUBLE PRECISION, INTENT(IN)             :: m0(ndi)
+DOUBLE PRECISION, INTENT(IN)             :: f(ndi,ndi)
+
+
+INTEGER :: i1,j1
+
+DOUBLE PRECISION :: aux
+
+lambda=zero
+DO i1=1,ndi
+  aux=zero
+  DO j1=1,ndi
+    aux=aux+f(i1,j1)*m0(j1)
+  END DO
+  m(i1)=aux
+END DO
+lambda=dot_product(m,m)
+lambda=dsqrt(lambda)
+
+RETURN
+END SUBROUTINE deffib
+SUBROUTINE tensorprod2(a,b,c,ndi)
+!
+IMPLICIT NONE
+!
+INTEGER, INTENT(IN)                      :: ndi
+DOUBLE PRECISION, INTENT(IN)             :: a(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN)             :: b(ndi,ndi)
+DOUBLE PRECISION, INTENT(OUT)            :: c(ndi,ndi,ndi,ndi)
+
+
+
+INTEGER :: i,j,k,l
+
+
+
+DO i=1,ndi
+  DO j=1,ndi
+    DO k=1,ndi
+      DO l=1,ndi
+        c(i,j,k,l)=a(i,j)*b(k,l)
+      END DO
+    END DO
+  END DO
+END DO
+
+RETURN
+
+END SUBROUTINE tensorprod2
+SUBROUTINE visco(pk,cmat,vv,pkvol,pkiso,cmatvol,cmatiso,dtime,  &
+        vscprops,statev,ndi)
+
+
+
+!>    VISCOUS DISSIPATION: MAXWELL SPRINGS AND DASHPOTS SCHEME
+use global
+IMPLICIT NONE
+
+INTEGER, INTENT(IN OUT)                      :: ndi
+DOUBLE PRECISION, INTENT(OUT)            :: pk(ndi,ndi)
+DOUBLE PRECISION, INTENT(OUT)            :: cmat(ndi,ndi,ndi,ndi)
+INTEGER, INTENT(IN)                      :: vv
+DOUBLE PRECISION, INTENT(IN)             :: pkvol(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN)             :: pkiso(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN)             :: cmatvol(ndi,ndi,ndi,ndi)
+DOUBLE PRECISION, INTENT(IN OUT)         :: cmatiso(ndi,ndi,ndi,ndi)
+DOUBLE PRECISION, INTENT(IN OUT)         :: dtime
+DOUBLE PRECISION, INTENT(IN)             :: vscprops(6)
+DOUBLE PRECISION, INTENT(IN OUT)         :: statev(nsdv)
+
+
+
+INTEGER :: i1,j1,k1,l1, v1
+
+DOUBLE PRECISION :: q(ndi,ndi),qv(ndi,ndi),hv(ndi,ndi), hv0(ndi,ndi)
+DOUBLE PRECISION :: teta,tau,aux,auxc
+
+q=zero
+qv=zero
+hv=zero
+auxc=zero
+
+!     ( GENERAL MAXWELL DASHPOTS)
+DO v1=1,vv
+  
+  tau=vscprops(2*v1-1)
+  teta=vscprops(2*v1)
+  
+!      READ STATE VARIABLES
+  CALL hvread(hv,statev,v1,ndi)
+  hv0=hv
+!        RALAXATION TENSORS
+  CALL relax(qv,hv,aux,hv0,pkiso,dtime,tau,teta,ndi)
+  auxc=auxc+aux
+!        WRITE STATE VARIABLES
+  CALL hvwrite(statev,hv,v1,ndi)
+  
+  q=q+qv
+  
+END DO
+
+auxc=one+auxc
+pk=pkvol+pkiso
+
+
+DO i1=1,ndi
+  DO j1=1,ndi
+    pk(i1,j1)=pk(i1,j1)+q(i1,j1)
+    DO k1=1,ndi
+      DO l1=1,ndi
+        cmat(i1,j1,k1,l1)= cmatvol(i1,j1,k1,l1)+ auxc*cmatiso(i1,j1,k1,l1)
+      END DO
+    END DO
+  END DO
+END DO
+
+
+
+RETURN
+END SUBROUTINE visco
 SUBROUTINE projeul(a,aa,pe,ndi)
 
 
@@ -1710,6 +2826,242 @@ END DO
 
 RETURN
 END SUBROUTINE projeul
+SUBROUTINE factorial(fact,term)
+
+
+
+!>    FACTORIAL
+use global
+IMPLICIT NONE
+
+DOUBLE PRECISION, INTENT(OUT)            :: fact
+INTEGER, INTENT(IN)                      :: term
+
+
+
+INTEGER :: m
+
+fact = 1
+
+DO  m = 1, term
+  fact = fact * m
+END DO
+
+RETURN
+END SUBROUTINE factorial
+SUBROUTINE deformation(f,c,b,ndi)
+
+
+
+!>     RIGHT AND LEFT CAUCHY-GREEN DEFORMATION TENSORS
+use global
+IMPLICIT NONE
+
+INTEGER, INTENT(IN OUT)                  :: ndi
+DOUBLE PRECISION, INTENT(IN OUT)         :: f(ndi,ndi)
+DOUBLE PRECISION, INTENT(OUT)            :: c(ndi,ndi)
+DOUBLE PRECISION, INTENT(OUT)            :: b(ndi,ndi)
+
+
+!     RIGHT CAUCHY-GREEN DEFORMATION TENSOR
+c=matmul(transpose(f),f)
+!     LEFT CAUCHY-GREEN DEFORMATION TENSOR
+b=matmul(f,transpose(f))
+RETURN
+END SUBROUTINE deformation
+SUBROUTINE pull4(mat,spatial,finv,det,ndi)
+!>        PULL-BACK TIMES DET OF 4TH ORDER TENSOR
+use global
+IMPLICIT NONE
+
+INTEGER, INTENT(IN)                      :: ndi
+DOUBLE PRECISION, INTENT(OUT)            :: mat(ndi,ndi,ndi,ndi)
+DOUBLE PRECISION, INTENT(IN OUT)         :: spatial(ndi,ndi,ndi,ndi)
+DOUBLE PRECISION, INTENT(IN OUT)         :: finv(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN)             :: det
+
+
+
+INTEGER :: i1,j1,k1,l1,ii1,jj1,kk1,ll1
+
+
+DOUBLE PRECISION :: aux
+
+
+DO i1=1,ndi
+  DO j1=1,ndi
+    DO k1=1,ndi
+      DO l1=1,ndi
+        aux=zero
+        DO ii1=1,ndi
+          DO jj1=1,ndi
+            DO kk1=1,ndi
+              DO ll1=1,ndi
+                aux=aux+det* finv(i1,ii1)*finv(j1,jj1)*  &
+                    finv(k1,kk1)*finv(l1,ll1)*spatial(ii1,jj1,kk1,ll1)
+              END DO
+            END DO
+          END DO
+        END DO
+        mat(i1,j1,k1,l1)=aux
+      END DO
+    END DO
+  END DO
+END DO
+
+RETURN
+END SUBROUTINE pull4
+!****************************************************************************
+
+
+
+!     Utility subroutines
+!****************************************************************************
+!***************************************************************************
+
+SUBROUTINE matinv3dd(a,a_inv,det_a,istat)
+!
+! Returns A_inv, the inverse and det_A, the determinant
+! Note that the det is of the original matrix, not the
+! inverse
+!
+use global
+
+real(8), INTENT(IN)                       :: a(3,3)
+real(8), INTENT(OUT)                      :: a_inv(3,3)
+real(8), INTENT(OUT)                      :: det_a
+INTEGER, INTENT(OUT)                     :: istat
+
+!
+
+!
+real(8)  det_a_inv
+!
+istat = 1
+
+det_a = a(1,1)*(a(2,2)*a(3,3) - a(3,2)*a(2,3)) -  &
+    a(2,1)*(a(1,2)*a(3,3) - a(3,2)*a(1,3)) +  &
+    a(3,1)*(a(1,2)*a(2,3) - a(2,2)*a(1,3))
+
+IF (det_a <= 0.d0) THEN
+  WRITE(*,*) 'WARNING: subroutine matInv3Dd:'
+  WRITE(*,*) 'WARNING: det of mat=',det_a
+  istat = 0
+  RETURN
+END IF
+!
+det_a_inv = 1.d0/det_a
+!
+a_inv(1,1) = det_a_inv*(a(2,2)*a(3,3)-a(3,2)*a(2,3))
+a_inv(1,2) = det_a_inv*(a(3,2)*a(1,3)-a(1,2)*a(3,3))
+a_inv(1,3) = det_a_inv*(a(1,2)*a(2,3)-a(2,2)*a(1,3))
+a_inv(2,1) = det_a_inv*(a(3,1)*a(2,3)-a(2,1)*a(3,3))
+a_inv(2,2) = det_a_inv*(a(1,1)*a(3,3)-a(3,1)*a(1,3))
+a_inv(2,3) = det_a_inv*(a(2,1)*a(1,3)-a(1,1)*a(2,3))
+a_inv(3,1) = det_a_inv*(a(2,1)*a(3,2)-a(3,1)*a(2,2))
+a_inv(3,2) = det_a_inv*(a(3,1)*a(1,2)-a(1,1)*a(3,2))
+a_inv(3,3) = det_a_inv*(a(1,1)*a(2,2)-a(2,1)*a(1,2))
+!
+RETURN
+END SUBROUTINE matinv3dd
+!!!
+
+SUBROUTINE matinv2d(a,a_inv,det_a,istat)
+!
+! Returns A_inv, the inverse, and det_A, the determinant
+! Note that the det is of the original matrix, not the
+! inverse
+!
+use global
+
+real(8), INTENT(IN)                       :: a(2,2)
+real(8), INTENT(OUT)                      :: a_inv(2,2)
+real(8), INTENT(OUT)                      :: det_a
+INTEGER, INTENT(OUT)                     :: istat
+
+!
+
+!
+real(8)  det_a_inv
+
+
+istat = 1
+
+det_a = a(1,1)*a(2,2) - a(1,2)*a(2,1)
+
+IF (det_a <= 0.d0) THEN
+  WRITE(*,*) 'WARNING: subroutine matInv2D:'
+  WRITE(*,*) 'WARNING: det of mat=',det_a
+  istat = 0
+  RETURN
+END IF
+
+det_a_inv = 1.d0/det_a
+
+a_inv(1,1) =  det_a_inv*a(2,2)
+a_inv(1,2) = -det_a_inv*a(1,2)
+a_inv(2,1) = -det_a_inv*a(2,1)
+a_inv(2,2) =  det_a_inv*a(1,1)
+
+
+RETURN
+END SUBROUTINE matinv2d
+
+!****************************************************************************
+
+SUBROUTINE mdet(a,det)
+!
+! This subroutine calculates the determinant
+! of a 3 by 3 matrix [A]
+!
+use global
+
+real(8), INTENT(IN)                       :: a(3,3)
+real(8), INTENT(OUT)                      :: det
+
+!
+
+
+
+det = a(1,1)*a(2,2)*a(3,3) + a(1,2)*a(2,3)*a(3,1)  &
+    + a(1,3)*a(2,1)*a(3,2) - a(3,1)*a(2,2)*a(1,3)  &
+    - a(3,2)*a(2,3)*a(1,1) - a(3,3)*a(2,1)*a(1,2)
+
+
+RETURN
+END SUBROUTINE mdet
+
+!****************************************************************************
+
+SUBROUTINE onem0(a)
+!
+! This subroutine stores the identity matrix in the
+! 3 by 3 matrix [A]
+!
+use global
+
+real(8), INTENT(OUT)                      :: a(3,3)
+
+!
+INTEGER :: i,j
+!
+
+
+
+DO i=1,3
+  DO j=1,3
+    IF (i == j) THEN
+      a(i,j) = 1.0
+    ELSE
+      a(i,j) = 0.0
+    END IF
+  END DO
+END DO
+
+
+RETURN
+END SUBROUTINE onem0
+!***************************************************************************
 SUBROUTINE contraction44(s,LT,rt,ndi)
 
 
@@ -1755,131 +3107,55 @@ END DO
 
 RETURN
 END SUBROUTINE contraction44
-SUBROUTINE initialize(statev)
+SUBROUTINE setiso(ciso,cfic,pe,siso,sfic,unit2,ndi)
+
+
 use global
 IMPLICIT NONE
 
-!      DOUBLE PRECISION TIME(2),KSTEP
-INTEGER :: pos1
-DOUBLE PRECISION, INTENT(OUT)            :: statev(nsdv)
-
-
-pos1=0
-!       DETERMINANT
-statev(pos1+1)=one
-!        CONTRACTION VARIANCE
-statev(pos1+2)=zero
-
-RETURN
-
-END SUBROUTINE initialize
-SUBROUTINE pull4(mat,spatial,finv,det,ndi)
-!>        PULL-BACK TIMES DET OF 4TH ORDER TENSOR
-use global
-IMPLICIT NONE
+!>    ISOCHORIC SPATIAL ELASTICITY TENSOR
 
 INTEGER, INTENT(IN)                      :: ndi
-DOUBLE PRECISION, INTENT(OUT)            :: mat(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION, INTENT(IN OUT)         :: spatial(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION, INTENT(IN OUT)         :: finv(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: det
+DOUBLE PRECISION, INTENT(OUT)            :: ciso(ndi,ndi,ndi,ndi)
+DOUBLE PRECISION, INTENT(IN OUT)         :: cfic(ndi,ndi,ndi,ndi)
+DOUBLE PRECISION, INTENT(IN)             :: pe(ndi,ndi,ndi,ndi)
+DOUBLE PRECISION, INTENT(IN)             :: siso(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN)             :: sfic(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN)             :: unit2(ndi,ndi)
 
 
 
-INTEGER :: i1,j1,k1,l1,ii1,jj1,kk1,ll1
+INTEGER :: i1,j1,k1,l1
+DOUBLE PRECISION :: cisoaux(ndi,ndi,ndi,ndi), cisoaux1(ndi,ndi,ndi,ndi)
+DOUBLE PRECISION :: trfic,xx,yy,zz
 
+cisoaux1=zero
+cisoaux=zero
 
-DOUBLE PRECISION :: aux
+CALL contraction44(cisoaux1,pe,cfic,ndi)
+CALL contraction44(cisoaux,cisoaux1,pe,ndi)
 
+trfic=zero
+DO i1=1,ndi
+  trfic=trfic+sfic(i1,i1)
+END DO
 
 DO i1=1,ndi
   DO j1=1,ndi
     DO k1=1,ndi
       DO l1=1,ndi
-        aux=zero
-        DO ii1=1,ndi
-          DO jj1=1,ndi
-            DO kk1=1,ndi
-              DO ll1=1,ndi
-                aux=aux+det* finv(i1,ii1)*finv(j1,jj1)*  &
-                    finv(k1,kk1)*finv(l1,ll1)*spatial(ii1,jj1,kk1,ll1)
-              END DO
-            END DO
-          END DO
-        END DO
-        mat(i1,j1,k1,l1)=aux
-      END DO
-    END DO
-  END DO
-END DO
-
-RETURN
-END SUBROUTINE pull4
-SUBROUTINE setjr(cjr,sigma,unit2,ndi)
-
-
-use global
-IMPLICIT NONE
-!>    JAUMAN RATE CONTRIBUTION FOR THE SPATIAL ELASTICITY TENSOR
-
-INTEGER, INTENT(IN)                      :: ndi
-DOUBLE PRECISION, INTENT(OUT)            :: cjr(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION, INTENT(IN OUT)         :: sigma(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN OUT)         :: unit2(ndi,ndi)
-
-
-
-INTEGER :: i1,j1,k1,l1
-
-
-DO i1 = 1, ndi
-  DO j1 = 1, ndi
-    DO k1 = 1, ndi
-      DO l1 = 1, ndi
+        xx=cisoaux(i1,j1,k1,l1)
+        yy=trfic*pe(i1,j1,k1,l1)
+        zz=siso(i1,j1)*unit2(k1,l1)+unit2(i1,j1)*siso(k1,l1)
         
-        cjr(i1,j1,k1,l1)= (one/two)*(unit2(i1,k1)*sigma(j1,l1)  &
-            +sigma(i1,k1)*unit2(j1,l1)+unit2(i1,l1)*sigma(j1,k1)  &
-            +sigma(i1,l1)*unit2(j1,k1))
+        ciso(i1,j1,k1,l1)=xx+(two/three)*yy-(two/three)*zz
       END DO
     END DO
   END DO
 END DO
 
 RETURN
-END SUBROUTINE setjr
-SUBROUTINE setvol(cvol,pv,ppv,unit2,unit4s,ndi)
-
-
-
-!>    VOLUMETRIC SPATIAL ELASTICITY TENSOR
-use global
-IMPLICIT NONE
-
-INTEGER, INTENT(IN)                      :: ndi
-DOUBLE PRECISION, INTENT(OUT)            :: cvol(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION, INTENT(IN OUT)         :: pv
-DOUBLE PRECISION, INTENT(IN OUT)         :: ppv
-DOUBLE PRECISION, INTENT(IN OUT)         :: unit2(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN OUT)         :: unit4s(ndi,ndi,ndi,ndi)
-
-
-INTEGER :: i1,j1,k1,l1
-
-
-
-DO i1 = 1, ndi
-  DO j1 = 1, ndi
-    DO k1 = 1, ndi
-      DO l1 = 1, ndi
-        cvol(i1,j1,k1,l1)= ppv*unit2(i1,j1)*unit2(k1,l1)  &
-            -two*pv*unit4s(i1,j1,k1,l1)
-      END DO
-    END DO
-  END DO
-END DO
-
-RETURN
-END SUBROUTINE setvol
+END SUBROUTINE setiso
 
 subroutine icos_shape ( point_num, edge_num, face_num, face_order_max, &
   point_coord, edge_point, face_order, face_point )
@@ -3138,704 +4414,161 @@ subroutine sphere01_monomial_integral ( e, integral )
 
   return
 end
-SUBROUTINE resetdfgrd(dfgrd,ndi)
-
+SUBROUTINE sdvread(statev)
 use global
 implicit none
-INTEGER, INTENT(IN OUT)                  :: ndi
-DOUBLE PRECISION, INTENT(OUT)            :: dfgrd(ndi,ndi)
+!>    VISCOUS DISSIPATION: READ STATE VARS
+DOUBLE PRECISION, INTENT(IN)             :: statev(nsdv)
 
-dfgrd(1,1)=  one
-dfgrd(1,2)=  zero
-dfgrd(1,3)=  zero
-dfgrd(2,1)=  zero
-dfgrd(2,2)=  one
-dfgrd(2,3)=  zero
-dfgrd(3,1)=  zero
-dfgrd(3,2)=  zero
-dfgrd(3,3)=  one
-
-END SUBROUTINE resetdfgrd
-SUBROUTINE visco(pk,cmat,vv,pkvol,pkiso,cmatvol,cmatiso,dtime,  &
-        vscprops,statev,ndi)
-
-
-
-!>    VISCOUS DISSIPATION: MAXWELL SPRINGS AND DASHPOTS SCHEME
-use global
-IMPLICIT NONE
-
-INTEGER, INTENT(IN OUT)                      :: ndi
-DOUBLE PRECISION, INTENT(OUT)            :: pk(ndi,ndi)
-DOUBLE PRECISION, INTENT(OUT)            :: cmat(ndi,ndi,ndi,ndi)
-INTEGER, INTENT(IN)                      :: vv
-DOUBLE PRECISION, INTENT(IN)             :: pkvol(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: pkiso(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: cmatvol(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION, INTENT(IN OUT)         :: cmatiso(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION, INTENT(IN OUT)         :: dtime
-DOUBLE PRECISION, INTENT(IN)             :: vscprops(6)
-DOUBLE PRECISION, INTENT(IN OUT)         :: statev(nsdv)
-
-
-
-INTEGER :: i1,j1,k1,l1, v1
-
-DOUBLE PRECISION :: q(ndi,ndi),qv(ndi,ndi),hv(ndi,ndi), hv0(ndi,ndi)
-DOUBLE PRECISION :: teta,tau,aux,auxc
-
-q=zero
-qv=zero
-hv=zero
-auxc=zero
-
-!     ( GENERAL MAXWELL DASHPOTS)
-DO v1=1,vv
-  
-  tau=vscprops(2*v1-1)
-  teta=vscprops(2*v1)
-  
-!      READ STATE VARIABLES
-  CALL hvread(hv,statev,v1,ndi)
-  hv0=hv
-!        RALAXATION TENSORS
-  CALL relax(qv,hv,aux,hv0,pkiso,dtime,tau,teta,ndi)
-  auxc=auxc+aux
-!        WRITE STATE VARIABLES
-  CALL hvwrite(statev,hv,v1,ndi)
-  
-  q=q+qv
-  
-END DO
-
-auxc=one+auxc
-pk=pkvol+pkiso
-
-
-DO i1=1,ndi
-  DO j1=1,ndi
-    pk(i1,j1)=pk(i1,j1)+q(i1,j1)
-    DO k1=1,ndi
-      DO l1=1,ndi
-        cmat(i1,j1,k1,l1)= cmatvol(i1,j1,k1,l1)+ auxc*cmatiso(i1,j1,k1,l1)
-      END DO
-    END DO
-  END DO
-END DO
 
 
 
 RETURN
-END SUBROUTINE visco
-SUBROUTINE fibdir(fib,st0,st,noel,ndi,vorif,vd,distgr,dfgrd1)
 
-
-DOUBLE PRECISION, INTENT(IN)             :: fib(NE,4)
-DOUBLE PRECISION, INTENT(OUT)            :: st0(3,3)
-DOUBLE PRECISION, INTENT(OUT)            :: st(3,3)
-INTEGER, INTENT(IN OUT)                  :: noel
-INTEGER, INTENT(IN)                      :: ndi
-DOUBLE PRECISION, INTENT(OUT)            :: vorif(3)
-DOUBLE PRECISION, INTENT(OUT)            :: vd(3)
-DOUBLE PRECISION, INTENT(IN OUT)         :: distgr(3,3)
-DOUBLE PRECISION, INTENT(IN)             :: dfgrd1(3,3)
-
-
-INTEGER :: inoel,i,j,i1,j1
-DOUBLE PRECISION :: sum1, dnorm
+END SUBROUTINE sdvread
+SUBROUTINE contraction42(s,LT,rt,ndi)
 
 
 
-inoel=0
-i=0
-DO i=1,nelem
-!               ELEMENT IDENTIFICATION
-  IF(noel == INT(fib(i,1))) THEN
-    inoel=i
-  END IF
-END DO
-
-!     FIB - FIBER ORIENTATION
-dnorm=DSQRT(fib(inoel,2)*fib(inoel,2)+ fib(inoel,3)*fib(inoel,3)+  &
-    fib(inoel,4)*fib(inoel,4))
-
-!       UNDERFORMED FIBER ORIENTATION TENSOR
-
-DO i1=1,ndi
-  j1=i1+1
-!       FIBER ORIENTATION NORMALIZED VECTOR - FAMILY 1
-  vorif(i1)=fib(inoel,j1)/dnorm
-END DO
-
-
-DO i=1,ndi
-  sum1=zero
-  DO j=1,ndi
-    sum1=sum1+dfgrd1(i,j)*vorif(j)
-  END DO
-!     FIBER DIRECTIONS IN THE DEFORMED CONFIGURATION
-!               -FAMILY 1
-  vd(i)=sum1
-END DO
-dnorm=DSQRT(vd(1)*vd(1)+ vd(2)*vd(2)+  &
-    vd(3)*vd(3))
-!           COSINE OF THE ANGLE BETWEEN FIBERS
-
-
-!--------------------------------------------------------------------------
-DO i=1,ndi
-  DO j=1,ndi
-!       STRUCTURAL TENSOR - FAMILY 1
-    st0(i,j)=vorif(i)*vorif(j)
-  END DO
-END DO
-
-!       STRUCTURE TENSOR IN THE DEFORMED CONFIGURATION - FAMILY 1
-st=matmul(st0,transpose(distgr))
-st=matmul(distgr,st)
-
-
-RETURN
-END SUBROUTINE fibdir
-SUBROUTINE deffib(lambda,m,m0,f,ndi)
-
-
-
-!>      SINGLE FIBER: STRETCH AND DEFORMED DIRECTION
+!>       DOUBLE CONTRACTION BETWEEN 4TH ORDER AND 2ND ORDER  TENSOR
+!>      INPUT:
+!>       LT - left 4TH ORDER TENSOR
+!>       RT - right  2ND ODER TENSOR
+!>      OUTPUT:
+!>       S - DOUBLE CONTRACTED TENSOR (2ND ORDER)
 use global
 IMPLICIT NONE
 
 INTEGER, INTENT(IN)                      :: ndi
-DOUBLE PRECISION, INTENT(OUT)            :: lambda
-DOUBLE PRECISION, INTENT(OUT)            :: m(ndi)
-DOUBLE PRECISION, INTENT(IN)             :: m0(ndi)
-DOUBLE PRECISION, INTENT(IN)             :: f(ndi,ndi)
-
-
-INTEGER :: i1,j1
-
-DOUBLE PRECISION :: aux
-
-lambda=zero
-DO i1=1,ndi
-  aux=zero
-  DO j1=1,ndi
-    aux=aux+f(i1,j1)*m0(j1)
-  END DO
-  m(i1)=aux
-END DO
-lambda=dot_product(m,m)
-lambda=dsqrt(lambda)
-
-RETURN
-END SUBROUTINE deffib
-SUBROUTINE sdvwrite(det,lambda,frac_pld,prefang,statev)
-!>    VISCOUS DISSIPATION: WRITE STATE VARS
-use global
-implicit none
-
-INTEGER :: pos1
-!
-DOUBLE PRECISION, INTENT(IN)             :: det,lambda,frac_pld,prefang
-DOUBLE PRECISION, INTENT(OUT)            :: statev(nsdv)
-!
-pos1=0
-statev(pos1+1)=det
-statev(pos1+2)=lambda
-statev(pos1+3)=frac_pld
-statev(pos1+4)=prefang
-
-
-RETURN
-
-END SUBROUTINE sdvwrite
-SUBROUTINE chemicalstat(frac,frac0,k,dtime)
-
-
-use global
-IMPLICIT NONE
-
-DOUBLE PRECISION, INTENT(OUT)            :: frac(4)
-DOUBLE PRECISION, INTENT(IN)             :: frac0(4)
-DOUBLE PRECISION, INTENT(IN)             :: k(7)
-DOUBLE PRECISION, INTENT(IN)             :: dtime
-
-
-DOUBLE PRECISION :: stiff(4,4)
-
-DOUBLE PRECISION :: aux
-INTEGER :: i1,j1
-
-frac=zero
-stiff=zero
-stiff(1,1)=-k(1)
-stiff(1,2)=k(2)
-stiff(1,4)=k(7)
-stiff(2,1)=k(1)
-stiff(2,2)=-k(2)-k(3)
-stiff(2,3)=k(4)
-stiff(3,2)=k(3)
-stiff(3,3)=-k(4)-k(5)
-stiff(3,4)=k(6)
-stiff(4,3)=k(5)
-stiff(4,4)=-k(6)-k(7)
-
-DO i1=1,4
-  aux=zero
-  DO j1=1,4
-    aux=aux+stiff(i1,j1)*frac0(j1)
-  END DO
-  frac(i1)=aux*dtime+frac0(i1)
-END DO
-
-!      FRAC0=FRAC
-
-RETURN
-END SUBROUTINE chemicalstat
-SUBROUTINE anisomat_discrete(w,sfic,cfic,f,props,  &
-        efi,noel,npt,kinc,det,factor,prefdir, ang_pref,pulled,ndi)
-
-!>    AFFINE NETWORK: 'FICTICIOUS' CAUCHY STRESS AND ELASTICITY TENSOR
-!> DISCRETE ANGULAR INTEGRATION SCHEME (icosahedron)
-use global
-IMPLICIT NONE
-
-INTEGER, INTENT(IN)                      :: ndi
-DOUBLE PRECISION, INTENT(OUT)            :: sfic(ndi,ndi)
-DOUBLE PRECISION, INTENT(OUT)            :: cfic(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION, INTENT(IN OUT)         :: f(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: props(8)
-DOUBLE PRECISION, INTENT(IN OUT)         :: efi
-INTEGER, INTENT(IN OUT)                  :: noel,npt,kinc
-DOUBLE PRECISION, INTENT(IN OUT)         :: det
-!variables for microstructure state
-DOUBLE PRECISION, INTENT(OUT)            :: pulled
-INTEGER :: j1,k1,l1,m1
-DOUBLE PRECISION :: sfibfic(ndi,ndi), cfibfic(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION :: mfi(ndi),mf0i(ndi)
-DOUBLE PRECISION :: aux,lambdai,dwi,ddwi,ddwi1,ddwi2,ddwi3
-DOUBLE PRECISION :: bdisp,ang,w,wi,rho,aux2,lambdain,lf
-DOUBLE PRECISION :: aic,ais
-DOUBLE PRECISION :: avga,maxa,suma,dirmax(ndi),kk1,kk2,ei
-DOUBLE PRECISION :: prefdir(nelem,4)
-DOUBLE PRECISION :: pd(3),lambda_pref,prefdir0(3),ang_pref
-
-
-! INTEGRATION SCHEME
-  integer ( kind = 4 ) node_num
-  integer ( kind = 4 ) a
-  real ( kind = 8 ) a_xyz(3)
-  real ( kind = 8 ) a2_xyz(3)
-  real ( kind = 8 ) ai !area of triangle i
-  real ( kind = 8 ) area_total
-  integer ( kind = 4 ) b
-  real ( kind = 8 ) b_xyz(3)
-  real ( kind = 8 ) b2_xyz(3)
-  integer ( kind = 4 ) c
-  real ( kind = 8 ) c_xyz(3)
-  real ( kind = 8 ) c2_xyz(3)
-  integer ( kind = 4 ) edge_num
-  integer ( kind = 4 ), allocatable, dimension ( :, : ) :: edge_point
-  integer ( kind = 4 ) f1
-  integer ( kind = 4 ) f2
-  integer ( kind = 4 ) f3
-  integer ( kind = 4 ) face
-  integer ( kind = 4 ) face_num
-  integer ( kind = 4 ), allocatable, dimension ( : ) :: face_order
-  integer ( kind = 4 ), allocatable, dimension ( :, : ) :: face_point
-  integer ( kind = 4 ) face_order_max
-  integer ( kind = 4 ) factor
-  real ( kind = 8 ) node_xyz(3)
-  real ( kind = 8 ), parameter :: pi = 3.141592653589793D+00
-  real ( kind = 8 ), allocatable, dimension ( :, : ) :: point_coord
-  integer ( kind = 4 ) point_num
-  real ( kind = 8 ) rr, aa
-  real ( kind = 8 ) v
-
-
-!  Size the icosahedron.
-!
-  call icos_size ( point_num, edge_num, face_num, face_order_max )
-!
-!  Set the icosahedron.
-!
-  allocate ( point_coord(1:3,1:point_num) )
-  allocate ( edge_point(1:2,1:edge_num) )
-  allocate ( face_order(1:face_num) )
-  allocate ( face_point(1:face_order_max,1:face_num) )
-
-  call icos_shape ( point_num, edge_num, face_num, face_order_max, &
-    point_coord, edge_point, face_order, face_point )
-!
-!  Initialize the integral data.
-!
-  rr = 0.0D+00
-  area_total = 0.0D+00
-  node_num = 0
-  
-
-!! initialize the model data
-  !     fibers
-kk1      = props(4)
-kk2      = props(5)
-bdisp    = props(6)
-lf       = props(7)
-
-  aux=two*(det**(-one))
-  aux2=four*(det**(-four/three))
-  cfic=zero
-  sfic=zero
-
-  aa = zero
-  rr = zero
-  avga=zero
-  maxa=zero
-  suma=zero
-  dirmax=zero
-
-  pulled = zero
-  
-  !preferred direction measures (macroscale measures)
-  prefdir0=prefdir(noel,2:4)
-  !calculate preferred direction in the deformed configuration
-  CALL deffib(lambda_pref,pd,prefdir0,f,ndi)
-  !update preferential direction - deformed configuration
-  pd=pd/dsqrt(dot_product(pd,pd))
-  !rotation of the preferred direction
-  prefdir0=prefdir0/dsqrt(dot_product(prefdir0,prefdir0))
-  ang_pref=dot_product(pd,prefdir0)
-  ang_pref=acos(ang_pref)
-
-  !prefdir1(noel,2:4)=pd
-!  Pick a face of the icosahedron, and identify its vertices as A, B, C.
-!
-  do face = 1, face_num
-!
-    a = face_point(1,face)
-    b = face_point(2,face)
-    c = face_point(3,face)
-!
-    a_xyz(1:3) = point_coord(1:3,a)
-    b_xyz(1:3) = point_coord(1:3,b)
-    c_xyz(1:3) = point_coord(1:3,c)
-!
-!  Some subtriangles will have the same direction as the face.
-!  Generate each in turn, by determining the barycentric coordinates
-!  of the centroid (F1,F2,F3), from which we can also work out the barycentric
-!  coordinates of the vertices of the subtriangle.
-!
-    do f3 = 1, 3 * factor - 2, 3
-      do f2 = 1, 3 * factor - f3 - 1, 3
-
-        f1 = 3 * factor - f3 - f2
-
-        call sphere01_triangle_project ( a_xyz, b_xyz, c_xyz, f1, f2, f3, &
-          node_xyz )
-
-        call sphere01_triangle_project ( &
-          a_xyz, b_xyz, c_xyz, f1 + 2, f2 - 1, f3 - 1, a2_xyz )
-        call sphere01_triangle_project ( &
-          a_xyz, b_xyz, c_xyz, f1 - 1, f2 + 2, f3 - 1, b2_xyz )
-        call sphere01_triangle_project ( &
-          a_xyz, b_xyz, c_xyz, f1 - 1, f2 - 1, f3 + 2, c2_xyz )
-
-        call sphere01_triangle_vertices_to_area ( a2_xyz, b2_xyz, c2_xyz, ai )
-
-        !direction of the sphere triangle barycenter - direction i
-        mf0i=node_xyz
-        CALL deffib(lambdai,mfi,mf0i,f,ndi)
-  
-        CALL bangle(ang,f,mfi,noel,pd,ndi) 
-
-        CALL density(rho,ang,bdisp,efi)
-        !scaled weight
-        ai = ai/(two*pi)
-        !rho=rho/(four*pi)
-        !strain-like of fiber i
-        !lambdai=lambdai*lambdai
-        lambdai=lambdai/lf
-        ei = lambdai-one
-         !calculate fiber sef and sef derivatives values
-        if (ei .ge. zero) then
-
-         
-          wi   = (kk1/(two*kk2))*(dexp(kk2*ei*ei)-one)
-          ! fiber derivatives
-          dwi  = kk1*ei*dexp(kk2*ei*ei)
-          ddwi = kk1*dexp(kk2*ei*ei)*(two*kk2*ei*ei+one)
-          
-                    !fiber sef
-          
-          !update weight
-          ais=ai*half*lambdai**(-one)*lf**(-two)
-          !stress and material  tangent
-        CALL sigfibfic(sfibfic,rho,dwi,mfi,ais,ndi)
-        ! 
-          aic=ais*half*lambdai**(-one)*lf**(-two)
-          write(*,*) ddwi*aic
-        CALL csfibfic(cfibfic,rho,dwi,ddwi,mfi,aic,ndi)
-!
-        DO j1=1,ndi
-           DO k1=1,ndi
-              sfic(j1,k1)=sfic(j1,k1)+aux*sfibfic(j1,k1)
-              DO l1=1,ndi
-                DO m1=1,ndi
-                  cfic(j1,k1,l1,m1)=cfic(j1,k1,l1,m1)+aux2*cfibfic(j1,k1,l1,m1)
-                END DO
-              END DO
-           END DO
-         END DO
-!
-        w=w+rho*ai*wi
-        aa=aa+rho*ai
-       endif
-        rr = rr +  rho*ai
-        node_num = node_num + 1  
-        area_total = area_total + ai
-        !write(*,*) node_num,ang, rho
-      end do
-    end do
-
-    !pulled=pulled*(node_num**(-one))
-
-! !
-! !  The other subtriangles have the opposite direction from the face.
-! !  Generate each in turn, by determining the barycentric coordinates
-! !  of the centroid (F1,F2,F3), from which we can also work out the barycentric
-! !  coordinates of the vertices of the subtriangle.
-! !
-!     do f3 = 2, 3 * factor - 4, 3
-!       do f2 = 2, 3 * factor - f3 - 2, 3
-
-!         f1 = 3 * factor - f3 - f2
-
-!         call sphere01_triangle_project ( a_xyz, b_xyz, c_xyz, f1, f2, f3, &
-!           node_xyz )
-
-!         call sphere01_triangle_project ( &
-!           a_xyz, b_xyz, c_xyz, f1 - 2, f2 + 1, f3 + 1, a2_xyz )
-!         call sphere01_triangle_project ( &
-!           a_xyz, b_xyz, c_xyz, f1 + 1, f2 - 2, f3 + 1, b2_xyz )
-!         call sphere01_triangle_project ( &
-!           a_xyz, b_xyz, c_xyz, f1 + 1, f2 + 1, f3 - 2, c2_xyz )
-
-!         call sphere01_triangle_vertices_to_area ( a2_xyz, b2_xyz, c2_xyz, ai )
-
-!         !direction of the sphere triangle barycenter - direction i
-!         mf0i=node_xyz
-!         CALL deffib(lambdai,mfi,mf0i,f,ndi)
-  
-!         CALL bangle(ang,f,mfi,noel,ndi)
-!         CALL density(rho,ang,bdisp,efi)
-!         !scaled weight
-!         ai = ai/(four*pi)
-!         !rho=rho/(four*pi)
-!         !strain-like of fiber i
-!         lambdai=lambdai/lf
-!         ei = lambdai-one
-!          !calculate fiber sef and sef derivatives values
-!         if (ei .ge. zero) then
-!           !fiber sef
-          !fiber sef
-!          wi   = (kk1/(two*kk2))*(dexp(kk2*ei*ei)-one)
-          ! fiber derivatives
-!          dwi  = kk1*ei*dexp(kk2*ei*ei)*((two*lambdai)**(-one))
-!          ddwi = (kk1/four)*lambdai**(-three/two)*dexp(kk2*ei*ei) & 
-!              & *(two*kk2*(lambdai**(-three/two)-two*lambdai*lambdai+lambdai) + one)
-!            ais=ai*(lf**(-two))
-!           !stress and material  tangent 
-!         CALL sigfibfic(sfibfic,rho,dwi,mfi,ais,ndi)
-!         ! 
-!            aic=ais*(lf**(-two))
-!         CALL csfibfic(cfibfic,rho,dwi,ddwi,mfi,aic,ndi)
-!         !
-!         DO j1=1,ndi
-!            DO k1=1,ndi
-!               sfic(j1,k1)=sfic(j1,k1)+aux*sfibfic(j1,k1)
-!               DO l1=1,ndi
-!                 DO m1=1,ndi
-!                   cfic(j1,k1,l1,m1)=cfic(j1,k1,l1,m1)+aux2*cfibfic(j1,k1,l1,m1)
-!                 END DO
-!               END DO
-!            END DO
-!          END DO
-! !
-!         w=w+rho*ai*wi
-!         aa=aa+1
-!        endif
-!         rr = rr +  rho*ai
-!         node_num = node_num + 1  
-!         area_total = area_total + ai
-!         write(*,*) node_num,ang, rho
-!       end do
-!     end do
-
-   end do
-   pulled=aa/rr
-  ! write(*,*) ang_pref*180.d0/pi,pulled
-! !
-!  Discard allocated memory.
-!
-  deallocate ( edge_point )
-  deallocate ( face_order )
-  deallocate ( face_point )
-  deallocate ( point_coord )
-
-!write(*,*) w,rr,area_total
-RETURN
-END SUBROUTINE anisomat_discrete
-SUBROUTINE bangle(ang,f,mf,noel,pdir,ndi)
-
-!>    ANGLE BETWEEN FILAMENT AND PREFERED DIRECTION
-
-use global
-IMPLICIT NONE
-
-INTEGER, INTENT(IN)                      :: ndi
-DOUBLE PRECISION, INTENT(OUT)            :: ang
-DOUBLE PRECISION, INTENT(IN OUT)         :: f(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: mf(ndi)
-DOUBLE PRECISION, INTENT(IN OUT)         :: pdir(ndi)
-INTEGER, INTENT(IN OUT)                  :: noel
-!
-!
-INTEGER :: inoel,i,j
-DOUBLE PRECISION :: dnorm, mfa(ndi),aux
-DOUBLE PRECISION :: c(ndi,ndi),egvc(ndi,ndi),egvl(ndi)
-!
-inoel=0
-i=0
-!DO i=1,nelem
-!               ELEMENT IDENTIFICATION
-!  IF(noel == INT(prefdir(i,1))) THEN
-!    inoel=i
-!  END IF
-!END DO
-!
-!DO i=1,ndi
-!  j=i+1
-!       PREFERED ORIENTATION  ORIENTATION NORMALIZED
-!  pdir(i)=prefdir(inoel,j)
-!END DO
-!        ALTERNATIVE APPROACH: BUNDLES FOLLOW PRINCIPAL DIRECTIONS
-!c=matmul(transpose(f),f)
-!CALL spectral(c,egvl,egvc)
-!       WRITE(*,*) EGVC
-!pdir(1)=egvc(1,1)
-!pdir(2)=egvc(2,1)
-!pdir(3)=egvc(3,1)
-!        END OF ALTERNATIVE
-
-!     PREFERED ORIENTATION
-dnorm=dot_product(pdir,pdir)
-dnorm=DSQRT(dnorm)
-!     PREFERED ORIENTATION  NORMALIZED
-pdir=pdir/dnorm
-
-!       FILAMENT ORIENTATION
-mfa=mf
-dnorm=dot_product(mfa,mfa)
-dnorm=dsqrt(dnorm)
-
-!       FILAMENT ORIENTATION  NORMALIZED
-mfa=mfa/dnorm
-!        ANGLE BETWEEN PREFERED ORIENTATION AND FILAMENT - BANGLE
-aux=dot_product(mfa,pdir)
-!        if AUX.GT.ONE
-!        endif
-!        write(*,*) aux
-ang=acos(aux)
-
-RETURN
-END SUBROUTINE bangle
-
-SUBROUTINE xit()
-
-
-
-CALL EXIT()
-
-END SUBROUTINE
-SUBROUTINE cmatisomatfic(cmisomatfic,cbar,cbari1,cbari2,  &
-        diso,unit2,unit4,det,ndi)
-
-
-
-!>    ISOTROPIC MATRIX: MATERIAL 'FICTICIOUS' ELASTICITY TENSOR
-use global
-IMPLICIT NONE
-
-INTEGER, INTENT(IN)                      :: ndi
-DOUBLE PRECISION, INTENT(IN OUT)         :: cmisomatfic(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: cbar(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: cbari1
-DOUBLE PRECISION, INTENT(IN OUT)         :: cbari2
-DOUBLE PRECISION, INTENT(IN)             :: diso(5)
-DOUBLE PRECISION, INTENT(IN)             :: unit2(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN OUT)         :: unit4(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION, INTENT(IN OUT)         :: det
-
+DOUBLE PRECISION, INTENT(OUT)            :: s(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN)             :: LT(ndi,ndi,ndi,ndi)
+DOUBLE PRECISION, INTENT(IN)             :: rt(ndi,ndi)
 
 
 INTEGER :: i1,j1,k1,l1
-    
 
-DOUBLE PRECISION :: dudi1,dudi2,d2ud2i1,d2ud2i2,d2udi1i2
-DOUBLE PRECISION :: aux,aux1,aux2,aux3,aux4
-DOUBLE PRECISION :: uij,ukl,cij,ckl
 
-dudi1=diso(1)
-dudi2=diso(2)
-d2ud2i1=diso(3)
-d2ud2i2=diso(4)
-d2udi1i2=diso(5)
+DOUBLE PRECISION :: aux
 
-aux1=four*(d2ud2i1+two*cbari1*d2udi1i2+ dudi2+cbari1*cbari1*d2ud2i2)
-aux2=-four*(d2udi1i2+cbari1*d2ud2i2)
-aux3=four*d2ud2i2
-aux4=-four*dudi2
+
 
 DO i1=1,ndi
   DO j1=1,ndi
+    aux=zero
     DO k1=1,ndi
       DO l1=1,ndi
-        uij=unit2(i1,j1)
-        ukl=unit2(k1,l1)
-        cij=cbar(i1,j1)
-        ckl=cbar(k1,l1)
-        aux=aux1*uij*ukl+ aux2*(uij*ckl+cij*ukl)+aux3*cij*ckl+  &
-            aux4*unit4(i1,j1,k1,l1)
-        cmisomatfic(i1,j1,k1,l1)=aux
+        aux=aux+LT(i1,j1,k1,l1)*rt(k1,l1)
       END DO
     END DO
+    s(i1,j1)=aux
   END DO
 END DO
-
 RETURN
-END SUBROUTINE cmatisomatfic
-SUBROUTINE rotation(f,r,u,ndi)
+END SUBROUTINE contraction42
+SUBROUTINE invariants(a,inv1,inv2,ndi)
 
 
 
-!>    COMPUTES ROTATION TENSOR
+!>    1ST AND 2ND INVARIANTS OF A TENSOR
 use global
 IMPLICIT NONE
 
-INTEGER, INTENT(IN OUT)                  :: ndi
-DOUBLE PRECISION, INTENT(IN OUT)         :: f(ndi,ndi)
-DOUBLE PRECISION, INTENT(OUT)            :: r(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN OUT)         :: u(ndi,ndi)
+INTEGER, INTENT(IN)                      :: ndi
+DOUBLE PRECISION, INTENT(IN)             :: a(ndi,ndi)
+DOUBLE PRECISION, INTENT(OUT)            :: inv1
+DOUBLE PRECISION, INTENT(OUT)            :: inv2
 
 
 
+INTEGER :: i1
+DOUBLE PRECISION :: aa(ndi,ndi)
+DOUBLE PRECISION :: inv1aa
 
-DOUBLE PRECISION :: uinv(ndi,ndi)
+inv1=zero
+inv1aa=zero
+aa=matmul(a,a)
+DO i1=1,ndi
+  inv1=inv1+a(i1,i1)
+  inv1aa=inv1aa+aa(i1,i1)
+END DO
+inv2=(one/two)*(inv1*inv1-inv1aa)
 
-CALL matinv3d(u,uinv,ndi)
-
-r = matmul(f,uinv)
 RETURN
-END SUBROUTINE rotation
+END SUBROUTINE invariants
+SUBROUTINE sigisomatfic(sfic,pkfic,f,det,ndi)
+
+
+
+!>    ISOTROPIC MATRIX:  ISOCHORIC CAUCHY STRESS
+use global
+IMPLICIT NONE
+
+
+INTEGER, INTENT(IN OUT)                  :: ndi
+DOUBLE PRECISION, INTENT(IN OUT)         :: sfic(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN OUT)         :: pkfic(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN OUT)         :: f(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN OUT)         :: det
+
+
+
+
+
+CALL push2(sfic,pkfic,f,det,ndi)
+
+RETURN
+END SUBROUTINE sigisomatfic
+SUBROUTINE initialize(statev)
+use global
+IMPLICIT NONE
+
+!      DOUBLE PRECISION TIME(2),KSTEP
+INTEGER :: pos1
+DOUBLE PRECISION, INTENT(OUT)            :: statev(nsdv)
+
+
+pos1=0
+!       DETERMINANT
+statev(pos1+1)=one
+!        CONTRACTION VARIANCE
+statev(pos1+2)=zero
+
+RETURN
+
+END SUBROUTINE initialize
+SUBROUTINE pk2anisomatfic(afic,daniso,cbar,inv4,st0,ndi)
+!
+use global
+implicit none
+!>      ANISOTROPIC MATRIX: 2PK 'FICTICIOUS' STRESS TENSOR
+!       INPUT:
+!       DANISO - ANISOTROPIC STRAIN-ENERGY DERIVATIVES
+!       CBAR - DEVIATORIC LEFT CAUCHY-GREEN TENSOR
+!       INV1,INV4 -CBAR INVARIANTS
+!       UNIT2 - 2ND ORDER IDENTITY TENSOR
+!       OUTPUT:
+!       AFIC - 2ND PIOLA KIRCHOOF 'FICTICIOUS' STRESS TENSOR
+INTEGER, INTENT(IN OUT)                  :: ndi
+DOUBLE PRECISION, INTENT(OUT)            :: afic(ndi,ndi)
+DOUBLE PRECISION, INTENT(IN)             :: daniso(3)
+DOUBLE PRECISION, INTENT(IN OUT)         :: cbar(3,3)
+DOUBLE PRECISION, INTENT(IN OUT)         :: inv4
+DOUBLE PRECISION, INTENT(IN)             :: st0(3,3)
+
+DOUBLE PRECISION :: dudi4,di4dc(3,3)
+
+
+
+!-----------------------------------------------------------------------------
+!FIRST DERIVATIVE OF SSEANISO IN ORDER TO I4
+dudi4=daniso(1)
+
+di4dc=st0
+
+afic=two*(dudi4*di4dc)
+
+RETURN
+END SUBROUTINE pk2anisomatfic
 SUBROUTINE indexx(stress,ddsdde,sig,tng,ntens,ndi)
 
 
@@ -3886,716 +4619,6 @@ END DO
 RETURN
 
 END SUBROUTINE indexx
-SUBROUTINE csisomatfic(cisomatfic,cmisomatfic,distgr,det,ndi)
-
-
-
-!>    ISOTROPIC MATRIX: SPATIAL 'FICTICIOUS' ELASTICITY TENSOR
-use global
-IMPLICIT NONE
-
-INTEGER, INTENT(IN OUT)                  :: ndi
-DOUBLE PRECISION, INTENT(IN OUT)         :: cisomatfic(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION, INTENT(IN OUT)         :: cmisomatfic(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION, INTENT(IN OUT)         :: distgr(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN OUT)         :: det
-
-
-
-call push4(cisomatfic,cmisomatfic,distgr,det,ndi)
-
-RETURN
-END SUBROUTINE csisomatfic
-SUBROUTINE hvread(hv,statev,v1,ndi)
-
-
-
-!>    VISCOUS DISSIPATION: READ STATE VARS
-use global
-IMPLICIT NONE
-
-INTEGER, INTENT(IN OUT)                  :: ndi
-
-DOUBLE PRECISION, INTENT(OUT)            :: hv(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: statev(nsdv)
-INTEGER, INTENT(IN)                      :: v1
-
-
-
-INTEGER :: pos
-
-
-pos=9*v1-9
-hv(1,1)=statev(1+pos)
-hv(1,2)=statev(2+pos)
-hv(1,3)=statev(3+pos)
-hv(2,1)=statev(4+pos)
-hv(2,2)=statev(5+pos)
-hv(2,3)=statev(6+pos)
-hv(3,1)=statev(7+pos)
-hv(3,2)=statev(8+pos)
-hv(3,3)=statev(9+pos)
-
-RETURN
-
-END SUBROUTINE hvread
-SUBROUTINE relax(qv,hv,aux1,hv0,pkiso,dtime,tau,teta,ndi)
-
-
-
-!>    VISCOUS DISSIPATION: STRESS RELAXATION TENSORS
-use global
-IMPLICIT NONE
-
-INTEGER, INTENT(IN)                      :: ndi
-DOUBLE PRECISION, INTENT(OUT)            :: qv(ndi,ndi)
-DOUBLE PRECISION, INTENT(OUT)            :: hv(ndi,ndi)
-DOUBLE PRECISION, INTENT(OUT)            :: aux1
-DOUBLE PRECISION, INTENT(IN)             :: hv0(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: pkiso(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: dtime
-DOUBLE PRECISION, INTENT(IN OUT)         :: tau
-DOUBLE PRECISION, INTENT(IN)             :: teta
-
-
-
-INTEGER :: i1,j1
-
-DOUBLE PRECISION :: aux
-
-qv=zero
-hv=zero
-
-aux=DEXP(-dtime*((two*tau)**(-one)))
-aux1=teta*aux
-DO i1=1,ndi
-  DO j1=1,ndi
-    qv(i1,j1)=hv0(i1,j1)+aux1*pkiso(i1,j1)
-    hv(i1,j1)=aux*(aux*qv(i1,j1)-teta*pkiso(i1,j1))
-  END DO
-END DO
-
-RETURN
-END SUBROUTINE relax
-!****************************************************************************
-
-
-
-!     Utility subroutines
-!****************************************************************************
-!***************************************************************************
-
-SUBROUTINE matinv3dd(a,a_inv,det_a,istat)
-!
-! Returns A_inv, the inverse and det_A, the determinant
-! Note that the det is of the original matrix, not the
-! inverse
-!
-use global
-
-real(8), INTENT(IN)                       :: a(3,3)
-real(8), INTENT(OUT)                      :: a_inv(3,3)
-real(8), INTENT(OUT)                      :: det_a
-INTEGER, INTENT(OUT)                     :: istat
-
-!
-
-!
-real(8)  det_a_inv
-!
-istat = 1
-
-det_a = a(1,1)*(a(2,2)*a(3,3) - a(3,2)*a(2,3)) -  &
-    a(2,1)*(a(1,2)*a(3,3) - a(3,2)*a(1,3)) +  &
-    a(3,1)*(a(1,2)*a(2,3) - a(2,2)*a(1,3))
-
-IF (det_a <= 0.d0) THEN
-  WRITE(*,*) 'WARNING: subroutine matInv3Dd:'
-  WRITE(*,*) 'WARNING: det of mat=',det_a
-  istat = 0
-  RETURN
-END IF
-!
-det_a_inv = 1.d0/det_a
-!
-a_inv(1,1) = det_a_inv*(a(2,2)*a(3,3)-a(3,2)*a(2,3))
-a_inv(1,2) = det_a_inv*(a(3,2)*a(1,3)-a(1,2)*a(3,3))
-a_inv(1,3) = det_a_inv*(a(1,2)*a(2,3)-a(2,2)*a(1,3))
-a_inv(2,1) = det_a_inv*(a(3,1)*a(2,3)-a(2,1)*a(3,3))
-a_inv(2,2) = det_a_inv*(a(1,1)*a(3,3)-a(3,1)*a(1,3))
-a_inv(2,3) = det_a_inv*(a(2,1)*a(1,3)-a(1,1)*a(2,3))
-a_inv(3,1) = det_a_inv*(a(2,1)*a(3,2)-a(3,1)*a(2,2))
-a_inv(3,2) = det_a_inv*(a(3,1)*a(1,2)-a(1,1)*a(3,2))
-a_inv(3,3) = det_a_inv*(a(1,1)*a(2,2)-a(2,1)*a(1,2))
-!
-RETURN
-END SUBROUTINE matinv3dd
-!!!
-
-SUBROUTINE matinv2d(a,a_inv,det_a,istat)
-!
-! Returns A_inv, the inverse, and det_A, the determinant
-! Note that the det is of the original matrix, not the
-! inverse
-!
-use global
-
-real(8), INTENT(IN)                       :: a(2,2)
-real(8), INTENT(OUT)                      :: a_inv(2,2)
-real(8), INTENT(OUT)                      :: det_a
-INTEGER, INTENT(OUT)                     :: istat
-
-!
-
-!
-real(8)  det_a_inv
-
-
-istat = 1
-
-det_a = a(1,1)*a(2,2) - a(1,2)*a(2,1)
-
-IF (det_a <= 0.d0) THEN
-  WRITE(*,*) 'WARNING: subroutine matInv2D:'
-  WRITE(*,*) 'WARNING: det of mat=',det_a
-  istat = 0
-  RETURN
-END IF
-
-det_a_inv = 1.d0/det_a
-
-a_inv(1,1) =  det_a_inv*a(2,2)
-a_inv(1,2) = -det_a_inv*a(1,2)
-a_inv(2,1) = -det_a_inv*a(2,1)
-a_inv(2,2) =  det_a_inv*a(1,1)
-
-
-RETURN
-END SUBROUTINE matinv2d
-
-!****************************************************************************
-
-SUBROUTINE mdet(a,det)
-!
-! This subroutine calculates the determinant
-! of a 3 by 3 matrix [A]
-!
-use global
-
-real(8), INTENT(IN)                       :: a(3,3)
-real(8), INTENT(OUT)                      :: det
-
-!
-
-
-
-det = a(1,1)*a(2,2)*a(3,3) + a(1,2)*a(2,3)*a(3,1)  &
-    + a(1,3)*a(2,1)*a(3,2) - a(3,1)*a(2,2)*a(1,3)  &
-    - a(3,2)*a(2,3)*a(1,1) - a(3,3)*a(2,1)*a(1,2)
-
-
-RETURN
-END SUBROUTINE mdet
-
-!****************************************************************************
-
-SUBROUTINE onem0(a)
-!
-! This subroutine stores the identity matrix in the
-! 3 by 3 matrix [A]
-!
-use global
-
-real(8), INTENT(OUT)                      :: a(3,3)
-
-!
-INTEGER :: i,j
-!
-
-
-
-DO i=1,3
-  DO j=1,3
-    IF (i == j) THEN
-      a(i,j) = 1.0
-    ELSE
-      a(i,j) = 0.0
-    END IF
-  END DO
-END DO
-
-
-RETURN
-END SUBROUTINE onem0
-!***************************************************************************
-SUBROUTINE projlag(c,aa,pl,ndi)
-
-
-
-!>    LAGRANGIAN PROJECTION TENSOR
-!      INPUTS:
-!          IDENTITY TENSORS - A, AA
-!          ISOCHORIC LEFT CAUCHY GREEN TENSOR - C
-!          INVERSE OF C - CINV
-!      OUTPUTS:
-!          4TH ORDER SYMMETRIC LAGRANGIAN PROJECTION TENSOR - PL
-use global
-IMPLICIT NONE
-
-INTEGER, INTENT(IN OUT)                      :: ndi
-DOUBLE PRECISION, INTENT(IN)             :: c(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: aa(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION, INTENT(OUT)            :: pl(ndi,ndi,ndi,ndi)
-
-
-
-INTEGER :: i,j,k,l
-
-DOUBLE PRECISION :: cinv(ndi,ndi)
-
-CALL matinv3d(c,cinv,ndi)
-
-DO i=1,ndi
-  DO j=1,ndi
-    DO k=1,ndi
-      DO l=1,ndi
-        pl(i,j,k,l)=aa(i,j,k,l)-(one/three)*(cinv(i,j)*c(k,l))
-      END DO
-    END DO
-  END DO
-END DO
-
-RETURN
-END SUBROUTINE projlag
-SUBROUTINE density(rho,ang,bb,erfi)
-
-!>    SINGLE FILAMENT: DENSITY FUNCTION VALUE
-use global
-IMPLICIT NONE
-
-DOUBLE PRECISION, INTENT(OUT)            :: rho
-DOUBLE PRECISION, INTENT(IN OUT)         :: ang
-DOUBLE PRECISION, INTENT(IN OUT)         :: bb
-DOUBLE PRECISION, INTENT(IN OUT)         :: erfi
-
-
-
-DOUBLE PRECISION :: pi,aux1,aux2
-
-pi=four*ATAN(one)
-
-aux1=SQRT(bb/(two*pi))
-aux2=DEXP(bb*(COS(two*ang)+one))
-rho=four*aux1*aux2*(erfi**(-one))
-
-!alternative
-! aux1 = four*sqrt(bb/(two*pi))
-! aux2 = dexp(two*bb*(cos(ang))**two)
-! aux3 = erfi**(-one)
-! rho  = aux1*aux2*aux3
-
-RETURN
-END SUBROUTINE density
-SUBROUTINE pk2iso(pkiso,pkfic,pl,det,ndi)
-
-
-
-!>    ISOCHORIC PK2 STRESS TENSOR
-use global
-IMPLICIT NONE
-
-INTEGER, INTENT(IN)                      :: ndi
-DOUBLE PRECISION, INTENT(OUT)            :: pkiso(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN OUT)         :: pkfic(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN OUT)         :: pl(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: det
-
-
-
-INTEGER :: i1,j1
-
-DOUBLE PRECISION :: scale2
-
-CALL contraction42(pkiso,pl,pkfic,ndi)
-
-scale2=det**(-two/three)
-DO i1=1,ndi
-  DO j1=1,ndi
-    pkiso(i1,j1)=scale2*pkiso(i1,j1)
-  END DO
-END DO
-
-RETURN
-END SUBROUTINE pk2iso
-SUBROUTINE sigiso(siso,sfic,pe,ndi)
-
-
-
-!>    ISOCHORIC CAUCHY STRESS
-use global
-IMPLICIT NONE
-
-INTEGER, INTENT(IN OUT)                  :: ndi
-DOUBLE PRECISION, INTENT(IN OUT)         :: siso(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN OUT)         :: sfic(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN OUT)         :: pe(ndi,ndi,ndi,ndi)
-
-
-CALL contraction42(siso,pe,sfic,ndi)
-
-RETURN
-END SUBROUTINE sigiso
-SUBROUTINE push4(spatial,mat,f,det,ndi)
-
-
-
-!>        PIOLA TRANSFORMATION
-!>      INPUT:
-!>       MAT - MATERIAL ELASTICITY TENSOR
-!>       F - DEFORMATION GRADIENT
-!>       DET - DEFORMATION DETERMINANT
-!>      OUTPUT:
-!>       SPATIAL - SPATIAL ELASTICITY TENSOR
-use global
-IMPLICIT NONE
-
-INTEGER, INTENT(IN)                      :: ndi
-DOUBLE PRECISION, INTENT(OUT)            :: spatial(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION, INTENT(IN OUT)         :: mat(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION, INTENT(IN OUT)         :: f(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN OUT)         :: det
-
-
-INTEGER :: i1,j1,k1,l1,ii1,jj1,kk1,ll1
-
-
-DOUBLE PRECISION :: aux
-
-
-DO i1=1,ndi
-  DO j1=1,ndi
-    DO k1=1,ndi
-      DO l1=1,ndi
-        aux=zero
-        DO ii1=1,ndi
-          DO jj1=1,ndi
-            DO kk1=1,ndi
-              DO ll1=1,ndi
-                aux=aux+(det**(-one))* f(i1,ii1)*f(j1,jj1)*  &
-                    f(k1,kk1)*f(l1,ll1)*mat(ii1,jj1,kk1,ll1)
-              END DO
-            END DO
-          END DO
-        END DO
-        spatial(i1,j1,k1,l1)=aux
-      END DO
-    END DO
-  END DO
-END DO
-
-RETURN
-END SUBROUTINE push4
-SUBROUTINE vol(ssev,pv,ppv,k,det)
-
-! Code converted using TO_F90 by Alan Miller
-! Date: 2020-12-12  Time: 12:08:12
-
-!>     VOLUMETRIC CONTRIBUTION :STRAIN ENERGY FUNCTION AND DERIVATIVES
-use global
-implicit none
-
-
-DOUBLE PRECISION :: g, aux
-DOUBLE PRECISION, INTENT(OUT)            :: ssev
-DOUBLE PRECISION, INTENT(OUT)            :: pv
-DOUBLE PRECISION, INTENT(OUT)            :: ppv
-DOUBLE PRECISION, INTENT(IN)             :: k
-DOUBLE PRECISION, INTENT(IN)             :: det
-
-
-g=(one/four)*(det*det-one-two*LOG(det))
-
-ssev=k*g
-
-pv=k*(one/two)*(det-one/det)
-aux=k*(one/two)*(one+one/(det*det))
-ppv=pv+det*aux
-
-RETURN
-END SUBROUTINE vol
-SUBROUTINE onem(a,aa,aas,ndi)
-
-
-
-!>      THIS SUBROUTINE GIVES:
-!>          2ND ORDER IDENTITY TENSORS - A
-!>          4TH ORDER IDENTITY TENSOR - AA
-!>          4TH ORDER SYMMETRIC IDENTITY TENSOR - AAS
-use global
-IMPLICIT NONE
-
-INTEGER, INTENT(IN)                      :: ndi
-DOUBLE PRECISION, INTENT(OUT)            :: a(ndi,ndi)
-DOUBLE PRECISION, INTENT(OUT)            :: aa(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION, INTENT(OUT)            :: aas(ndi,ndi,ndi,ndi)
-
-
-
-INTEGER :: i,j,k,l
-
-
-
-DO i=1,ndi
-  DO j=1,ndi
-    IF (i == j) THEN
-      a(i,j) = one
-    ELSE
-      a(i,j) = zero
-    END IF
-  END DO
-END DO
-
-DO i=1,ndi
-  DO j=1,ndi
-    DO k=1,ndi
-      DO l=1,ndi
-        aa(i,j,k,l)=a(i,k)*a(j,l)
-        aas(i,j,k,l)=(one/two)*(a(i,k)*a(j,l)+a(i,l)*a(j,k))
-      END DO
-    END DO
-  END DO
-END DO
-
-RETURN
-END SUBROUTINE onem
-SUBROUTINE metiso(cmiso,cmfic,pl,pkiso,pkfic,c,unit2,det,ndi)
-
-
-
-!>    ISOCHORIC MATERIAL ELASTICITY TENSOR
-use global
-IMPLICIT NONE
-
-INTEGER, INTENT(IN OUT)                      :: ndi
-DOUBLE PRECISION, INTENT(OUT)            :: cmiso(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION, INTENT(IN OUT)         :: cmfic(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: pl(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: pkiso(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: pkfic(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN OUT)         :: c(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN OUT)         :: unit2(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: det
-
-
-
-INTEGER :: i1,j1,k1,l1
-DOUBLE PRECISION :: cisoaux(ndi,ndi,ndi,ndi), cisoaux1(ndi,ndi,ndi,ndi),  &
-    plt(ndi,ndi,ndi,ndi),cinv(ndi,ndi), pll(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION :: trfic,xx,yy,zz, aux,aux1
-
-CALL matinv3d(c,cinv,ndi)
-cisoaux1=zero
-cisoaux=zero
-CALL contraction44(cisoaux1,pl,cmfic,ndi)
-DO i1=1,ndi
-  DO j1=1,ndi
-    DO k1=1,ndi
-      DO l1=1,ndi
-        plt(i1,j1,k1,l1)=pl(k1,l1,i1,j1)
-      END DO
-    END DO
-  END DO
-END DO
-
-CALL contraction44(cisoaux,cisoaux1,plt,ndi)
-
-trfic=zero
-aux=det**(-two/three)
-aux1=aux**two
-CALL contraction22(trfic,aux*pkfic,c,ndi)
-
-DO i1=1,ndi
-  DO j1=1,ndi
-    DO k1=1,ndi
-      DO l1=1,ndi
-        xx=aux1*cisoaux(i1,j1,k1,l1)
-        pll(i1,j1,k1,l1)=(one/two)*(cinv(i1,k1)*cinv(j1,l1)+  &
-            cinv(i1,l1)*cinv(j1,k1))- (one/three)*cinv(i1,j1)*cinv(k1,l1)
-        yy=trfic*pll(i1,j1,k1,l1)
-        zz=pkiso(i1,j1)*cinv(k1,l1)+cinv(i1,j1)*pkiso(k1,l1)
-        
-        cmiso(i1,j1,k1,l1)=xx+(two/three)*yy-(two/three)*zz
-      END DO
-    END DO
-  END DO
-END DO
-
-RETURN
-END SUBROUTINE metiso
-SUBROUTINE erfi(erf,b,nterm)
-!>    IMAGINARY ERROR FUNCTION OF SQRT(B); B IS THE DISPERSION PARAM
-use global
-IMPLICIT NONE
-
-DOUBLE PRECISION, INTENT(OUT)            :: erf
-DOUBLE PRECISION, INTENT(IN OUT)         :: b
-INTEGER, INTENT(IN)                      :: nterm
-
-
-DOUBLE PRECISION :: pi
-DOUBLE PRECISION :: aux,aux1,aux2,aux3,aux4,fact
-INTEGER :: i1,j1
-
-pi=four*ATAN(one)
-aux=SQRT(two*b)
-aux1=two*aux
-aux2=(two/three)*(aux**three)
-aux4=zero
-DO j1=3,nterm
-  i1=j1-1
-  CALL factorial (fact,i1)
-  aux3=two*j1-one
-  aux4=aux4+(aux**aux3)/(half*aux3*fact)
-END DO
-
-erf=pi**(-one/two)*(aux1+aux2+aux4)
-RETURN
-END SUBROUTINE erfi
-SUBROUTINE deformation(f,c,b,ndi)
-
-
-
-!>     RIGHT AND LEFT CAUCHY-GREEN DEFORMATION TENSORS
-use global
-IMPLICIT NONE
-
-INTEGER, INTENT(IN OUT)                  :: ndi
-DOUBLE PRECISION, INTENT(IN OUT)         :: f(ndi,ndi)
-DOUBLE PRECISION, INTENT(OUT)            :: c(ndi,ndi)
-DOUBLE PRECISION, INTENT(OUT)            :: b(ndi,ndi)
-
-
-!     RIGHT CAUCHY-GREEN DEFORMATION TENSOR
-c=matmul(transpose(f),f)
-!     LEFT CAUCHY-GREEN DEFORMATION TENSOR
-b=matmul(f,transpose(f))
-RETURN
-END SUBROUTINE deformation
-SUBROUTINE push2(sig,pk,f,det,ndi)
-
-
-
-!>        PIOLA TRANSFORMATION
-!>      INPUT:
-!>       PK - 2ND PIOLA KIRCHOOF STRESS TENSOR
-!>       F - DEFORMATION GRADIENT
-!>       DET - DEFORMATION DETERMINANT
-!>      OUTPUT:
-!>       SIG - CAUCHY STRESS TENSOR
-use global
-IMPLICIT NONE
-
-INTEGER, INTENT(IN)                      :: ndi
-DOUBLE PRECISION, INTENT(OUT)            :: sig(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: pk(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: f(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN OUT)         :: det
-
-
-INTEGER :: i1,j1,ii1,jj1
-
-
-DOUBLE PRECISION :: aux
-
-DO i1=1,ndi
-  DO j1=1,ndi
-    aux=zero
-    DO ii1=1,ndi
-      DO jj1=1,ndi
-        aux=aux+(det**(-one))*f(i1,ii1)*f(j1,jj1)*pk(ii1,jj1)
-      END DO
-    END DO
-    sig(i1,j1)=aux
-  END DO
-END DO
-
-RETURN
-END SUBROUTINE push2
-SUBROUTINE setiso(ciso,cfic,pe,siso,sfic,unit2,ndi)
-
-
-use global
-IMPLICIT NONE
-
-!>    ISOCHORIC SPATIAL ELASTICITY TENSOR
-
-INTEGER, INTENT(IN)                      :: ndi
-DOUBLE PRECISION, INTENT(OUT)            :: ciso(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION, INTENT(IN OUT)         :: cfic(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: pe(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: siso(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: sfic(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: unit2(ndi,ndi)
-
-
-
-INTEGER :: i1,j1,k1,l1
-DOUBLE PRECISION :: cisoaux(ndi,ndi,ndi,ndi), cisoaux1(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION :: trfic,xx,yy,zz
-
-cisoaux1=zero
-cisoaux=zero
-
-CALL contraction44(cisoaux1,pe,cfic,ndi)
-CALL contraction44(cisoaux,cisoaux1,pe,ndi)
-
-trfic=zero
-DO i1=1,ndi
-  trfic=trfic+sfic(i1,i1)
-END DO
-
-DO i1=1,ndi
-  DO j1=1,ndi
-    DO k1=1,ndi
-      DO l1=1,ndi
-        xx=cisoaux(i1,j1,k1,l1)
-        yy=trfic*pe(i1,j1,k1,l1)
-        zz=siso(i1,j1)*unit2(k1,l1)+unit2(i1,j1)*siso(k1,l1)
-        
-        ciso(i1,j1,k1,l1)=xx+(two/three)*yy-(two/three)*zz
-      END DO
-    END DO
-  END DO
-END DO
-
-RETURN
-END SUBROUTINE setiso
-SUBROUTINE sigfibfic(sfic,rho,dw,m,rw,ndi)
-!>    SINGLE FIBER:  'FICTICIOUS' CAUCHY STRESS
-use global
-IMPLICIT NONE
-
-INTEGER, INTENT(IN)                      :: ndi !number of dimensions
-DOUBLE PRECISION, INTENT(OUT)            :: sfic(ndi,ndi) !ficticious cauchy stress 
-DOUBLE PRECISION, INTENT(IN)             :: rho  !angular density at m
-DOUBLE PRECISION, INTENT(IN)             :: dw !derivative of fiber strain energy
-DOUBLE PRECISION, INTENT(IN)             :: m(ndi) !direction vector
-DOUBLE PRECISION, INTENT(IN)             :: rw ! integration weight
-
-
-INTEGER :: i1,j1
-
-DOUBLE PRECISION :: aux
-
-aux = rho*dw*rw
-DO i1=1,ndi
-  DO j1=1,ndi
-    sfic(i1,j1)=aux*m(i1)*m(j1)
-  END DO
-END DO
-
-RETURN
-END SUBROUTINE sigfibfic
 SUBROUTINE fslip(f,fbar,det,ndi)
 
 
@@ -4632,46 +4655,22 @@ END DO
 
 RETURN
 END SUBROUTINE fslip
-SUBROUTINE cmatanisomatfic(cmanisomatfic,m0,daniso,unit2,det,ndi)
-!
-use global
-IMPLICIT NONE
-!
-!>    ANISOTROPIC MATRIX: MATERIAL 'FICTICIOUS' ELASTICITY TENSOR
-INTEGER, INTENT(IN)                      :: ndi
-DOUBLE PRECISION, INTENT(IN OUT)         :: cmanisomatfic(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION, INTENT(IN OUT)         :: m0(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN)             :: daniso(3)
-DOUBLE PRECISION, INTENT(IN OUT)         :: unit2(ndi,ndi)
-DOUBLE PRECISION, INTENT(IN OUT)         :: det
-!
-INTEGER :: i,j,k,l
-DOUBLE PRECISION :: cinv4(ndi,ndi,ndi,ndi),cinv14(ndi,ndi,ndi,ndi)
-DOUBLE PRECISION :: d2udi4,d2udi1di4
-DOUBLE PRECISION :: imm(ndi,ndi,ndi,ndi),mmi(ndi,ndi,ndi,ndi),  &
-    mm0(ndi,ndi,ndi,ndi)
+SUBROUTINE getoutdir(outdir, lenoutdir)
 
-!-----------------------------------------------------------------------------
-!2ND DERIVATIVE OF SSEANISO IN ORDER TO I4
-d2udi4=daniso(2)
-!2ND DERIVATIVE OF SSEANISO IN ORDER TO I1 AND I4
-d2udi1di4=daniso(3)
 
-CALL tensorprod2(m0,m0,mm0,ndi)
-CALL tensorprod2(unit2,m0,imm,ndi)
-CALL tensorprod2(m0,unit2,mmi,ndi)
 
-DO i=1,ndi
-  DO j=1,ndi
-    DO k=1,ndi
-      DO l=1,ndi
-        cinv4(i,j,k,l)=d2udi4*mm0(i,j,k,l)
-        cinv14(i,j,k,l)=d2udi1di4*(imm(i,j,k,l)+mmi(i,j,k,l))
-        cmanisomatfic(i,j,k,l)=four*(cinv4(i,j,k,l)+cinv14(i,j,k,l))
-      END DO
-    END DO
-  END DO
-END DO
+!>     GET CURRENT WORKING DIRECTORY
+INCLUDE 'aba_param.inc'
+
+
+CHARACTER (LEN=256), INTENT(IN OUT)      :: outdir
+INTEGER, INTENT(OUT)                     :: lenoutdir
+
+
+
+CALL getcwd(outdir)
+!        OUTDIR=OUTDIR(1:SCAN(OUTDIR,'\',BACK=.TRUE.)-1)
+lenoutdir=len_trim(outdir)
 
 RETURN
-END SUBROUTINE cmatanisomatfic
+END SUBROUTINE getoutdir

@@ -1,7 +1,7 @@
       SUBROUTINE SDVWRITE(DET,LAMBDA,STATEV)
 C>    VISCOUS DISSIPATION: WRITE STATE VARS
       IMPLICIT NONE
-      INCLUDE 'PARAM_UMAT.INC'
+      INCLUDE 'param_umat.inc'
 C
       DOUBLE PRECISION STATEV(NSDV),DET,LAMBDA
 C        write your sdvs here. they should be allocated 

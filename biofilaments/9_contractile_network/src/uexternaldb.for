@@ -1,7 +1,7 @@
       SUBROUTINE UEXTERNALDB(LOP,LRESTART,TIME,DTIME,KSTEP,KINC)
 C>    READ FILAMENTS ORIENTATION AND PREFERED DIRECTIONS
-      INCLUDE 'ABA_PARAM.INC'
-      INCLUDE 'PARAM_UMAT.INC'
+      INCLUDE 'aba_param.inc'
+      INCLUDE 'param_umat.inc'
 C       this subroutine get the directions and weights for
 C      the numerical integration
 C

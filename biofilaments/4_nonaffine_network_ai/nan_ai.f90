@@ -1,7 +1,7 @@
 PROGRAM TEST_GENERAL_UMAT
 use,intrinsic :: ISO_Fortran_env
 use global
-INCLUDE 'ABA_PARAM.INC'
+INCLUDE 'aba_param.inc'
 
 !C     ADD COMMON BLOCKS HERE IF NEEDED ()
 !C      COMMON /KBLOCK/KBLOCK

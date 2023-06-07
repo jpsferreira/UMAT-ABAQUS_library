@@ -1,7 +1,7 @@
       SUBROUTINE SDVREAD(STATEV,SEF0,DMG,DMGNL)
 C>    VISCOUS DISSIPATION: READ STATE VARS
       IMPLICIT NONE
-      INCLUDE 'PARAM_UMAT.INC'
+      INCLUDE 'param_umat.inc'
 C
       DOUBLE PRECISION STATEV(NSDV),SEF0,DMG,DMGNL
 C        read your sdvs here. they should be allocated. 

@@ -1,7 +1,7 @@
        SUBROUTINE INITIALIZE(STATEV)
 C
       IMPLICIT NONE
-      INCLUDE 'PARAM_UMAT.INC'
+      INCLUDE 'param_umat.inc'
 C      
 C      COMMON /KCOMMON/KBLOCK
 C

@@ -17,8 +17,8 @@ C     NONLOCAL DAMAGE
 C--------------------------------------------------------------------
       SUBROUTINE UEXTERNALDB(LOP,LRESTART,TIME,DTIME,KSTEP,KINC)
 C
-      INCLUDE 'ABA_PARAM.INC'
-      INCLUDE 'PARAM_UMAT.INC'
+      INCLUDE 'aba_param.inc'
+      INCLUDE 'param_umat.inc'
 C       this subroutine get the fibers directions resorting the
 C      .inc files and read the fibers direction
 C
@@ -99,8 +99,8 @@ C---------------------------------------------------------------------
      1 TIME,DTIME,CMNAME,ORNAME,NFIELD,NSTATV,NOEL,NPT,LAYER,
      2 KSPT,KSTEP,KINC,NDI,NSHR,COORD,JMAC,JMATYP,MATLAYO,LACCFLA)
 C
-      INCLUDE 'ABA_PARAM.INC'
-      INCLUDE 'PARAM_UMAT.INC'
+      INCLUDE 'aba_param.inc'
+      INCLUDE 'param_umat.inc'
 C
       CHARACTER*80 CMNAME,ORNAME
       CHARACTER*3  FLGRAY(15)
@@ -128,7 +128,7 @@ C---------------------------------------------------------------------
      4 CELENT,DFGRD0,DFGRD1,NOEL,NPT,LAYER,KSPT,KSTEP,KINC)
 C
       IMPLICIT NONE
-      INCLUDE 'PARAM_UMAT.INC'
+      INCLUDE 'param_umat.inc'
 C
       COMMON /KFIB/FIBORI
       COMMON /KFIB/FIBORI2

@@ -1,7 +1,7 @@
       SUBROUTINE NONLOCALDAMAGE(LOP)
 C
-      INCLUDE 'ABA_PARAM.INC'
-      INCLUDE 'PARAM_UMAT.INC'
+      INCLUDE 'aba_param.inc'
+      INCLUDE 'param_umat.inc'
 C
       COMMON /KPASSAGE/CMNV
 C

@@ -1,7 +1,7 @@
       SUBROUTINE UEXTERNALDBB(LOP,LRESTART,TIME,DTIME,KSTEP,KINC)
 C
-      INCLUDE 'ABA_PARAM.INC'
-      INCLUDE 'PARAM_UMAT.INC'
+      INCLUDE 'aba_param.inc'
+      INCLUDE 'param_umat.inc'
 C       this subroutine get the fibers directions resorting the
 C      .inc files and read the fibers direction
 C

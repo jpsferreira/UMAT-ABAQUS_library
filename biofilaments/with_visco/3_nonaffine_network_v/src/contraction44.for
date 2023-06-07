@@ -6,7 +6,7 @@ C>       RT - LEFT  4TH ORDER TENSOR
 C>      OUTPUT:
 C>       S - DOUBLE CONTRACTED TENSOR (4TH ORDER)
        IMPLICIT NONE
-       INCLUDE 'PARAM_UMAT.INC'
+       INCLUDE 'param_umat.inc'
 C
        INTEGER I1,J1,K1,L1,M1,N1,NDI
 C

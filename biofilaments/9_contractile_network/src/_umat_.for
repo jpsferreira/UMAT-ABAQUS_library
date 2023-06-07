@@ -20,7 +20,7 @@ C----------------------------------------------------------------------
 C--------------------------- DECLARATIONS -----------------------------
 C----------------------------------------------------------------------
       IMPLICIT NONE
-      INCLUDE 'PARAM_UMAT.INC'
+      INCLUDE 'param_umat.inc'
 C     FILAMENTS DIRECTION
       COMMON /KFIL/MF0
 C     FILAMENTS WEIGHT      

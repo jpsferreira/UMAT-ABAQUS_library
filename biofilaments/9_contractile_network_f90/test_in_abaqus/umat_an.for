@@ -875,7 +875,7 @@ C
       END SUBROUTINE PK2ISOMATFIC
       SUBROUTINE UEXTERNALDB(LOP,LRESTART,TIME,DTIME,KSTEP,KINC)
 C>    READ FILAMENTS ORIENTATION AND PREFERED DIRECTIONS
-      INCLUDE 'ABA_PARAM.INC'
+      INCLUDE 'aba_param.inc'
       use global
 implicit none
 C       this subroutine get the directions and weights for

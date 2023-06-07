@@ -1051,7 +1051,7 @@
        save
  !
        include 'params.inc'
-       INCLUDE 'PARAM_UMAT.INC'
+       INCLUDE 'param_umat.inc'
        dimension parent(nparmax,indmax)
        dimension iparent(nchrmax,indmax)
  !      dimension parent2(indmax,nparmax),iparent2(indmax,nchrmax)

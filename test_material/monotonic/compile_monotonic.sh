@@ -1,1 +1,1 @@
-gfortran -Wextra  -pedantic -o main *.for *.f90 -o monotonic
+gfortran -o main.o *.for *.f90 -o monotonic

@@ -6,7 +6,7 @@ C>       RT - LEFT  2ND ODER TENSOR
 C>      OUTPUT:
 C>       S - DOUBLE CONTRACTED TENSOR (2ND ORDER)
        IMPLICIT NONE
-       INCLUDE 'PARAM_UMAT.INC'
+       INCLUDE 'param_umat.inc'
 C
        INTEGER I1,J1,K1,L1,NDI
 C

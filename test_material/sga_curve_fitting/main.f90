@@ -3,8 +3,8 @@ PROGRAM TEST
 
 use,intrinsic :: ISO_Fortran_env
  
-INCLUDE 'ABA_PARAM.INC'
-INCLUDE 'PARAM_UMAT.INC'
+INCLUDE 'aba_param.inc'
+INCLUDE 'param_umat.inc'
 
       COMMON /KFIL/MF0
       COMMON /KFIL/RW
