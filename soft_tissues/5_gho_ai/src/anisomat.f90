@@ -24,7 +24,7 @@ d2ud2i1=diso(3)
 
 e1=i4*(one-three*kdisp)+i1*kdisp-one
 
-sseaniso=(k1/k2)*(DEXP(k1*e1*e1)-one)
+sseaniso=(k1/k2)*(DEXP(k2*e1*e1)-one)
 
 IF(e1 > zero) THEN
   

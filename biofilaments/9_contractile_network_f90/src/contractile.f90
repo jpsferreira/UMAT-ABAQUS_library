@@ -27,9 +27,6 @@ DOUBLE PRECISION, INTENT(IN OUT)         :: frac(nch)
 DOUBLE PRECISION, INTENT(IN OUT)         :: dtime
 
 
-
-
-
 !      CHECK STRETCH
 IF (ru0 > zero) THEN
   lambdac=lambdap+ru0

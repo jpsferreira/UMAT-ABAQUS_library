@@ -11,7 +11,6 @@ DOUBLE PRECISION, INTENT(OUT)            :: frac(4)
 DOUBLE PRECISION, INTENT(OUT)            :: ru0(nwp)
 
 
-
 pos1=0
 DO i1=1,4
   pos2=pos1+i1

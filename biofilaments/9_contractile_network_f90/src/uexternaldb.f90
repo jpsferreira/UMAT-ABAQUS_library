@@ -1,7 +1,5 @@
 SUBROUTINE uexternaldb(lop,lrestart,time,dtime,kstep,kinc)
 
-
-
 !>    READ FILAMENTS ORIENTATION AND PREFERED DIRECTIONS
 use global
 INCLUDE 'aba_param.inc'
