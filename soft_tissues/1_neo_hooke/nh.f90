@@ -6,7 +6,7 @@ INCLUDE 'param_umat.inc'
 !C     ADD COMMON BLOCKS HERE IF NEEDED ()
 !C      COMMON /KBLOCK/KBLOCK
 
-PARAMETER(NTENS = 6, NSTATEV = NSDV, NPROPS = 2, NDI=3, NSHR=3)
+PARAMETER(NTENS = 6, NSTATEV = NSDV, NPROPS = 9, NDI=3, NSHR=3)
 PARAMETER(NOEL = 1, NPT = 8)
 !
 CHARACTER*8 CMNAME
@@ -44,24 +44,22 @@ PROPS(1)=1000.d0
 ! ISOTROPIC MATRIX
 ! C10=
 PROPS(2)=1.00d0
-! C01
-!PROPS(3)=1.00d0
 !
 ! !viscous parameters - maxwell
 ! ! v - number of dashpots
-! PROPS(17)=0
+PROPS(3)=0
 ! !tau1 %
-! PROPS(18)=2.0d0
+PROPS(4)=2.0d0
 ! !teta1
-! PROPS(19)=0.835d0
+PROPS(5)=0.835d0
 ! !tau2 %
-! PROPS(20)=1.2d0
+PROPS(6)=1.2d0
 ! !teta2
-! PROPS(21)=7.0d0
+PROPS(7)=7.0d0
 ! !tau3 %
-! PROPS(22)=12.d0
+PROPS(8)=12.d0
 ! !teta3
-! PROPS(23)=2.0d0
+PROPS(9)=2.0d0
 ! !
 STATEV=0.D0
 !
