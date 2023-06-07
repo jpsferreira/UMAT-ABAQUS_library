@@ -51,7 +51,7 @@ C
      4 FIBORI(NELEM,4)
 C
       DOUBLE PRECISION SSE, SPD, SCD, RPL, DRPLDT, DTIME, TEMP,
-     1                 DTEMP,PNEWDT,CELENT
+     1                 DTEMP,PNEWDT,CELENT, TOL
 C
       INTEGER NTERM
 C
@@ -183,12 +183,14 @@ C     NUMERICAL COMPUTATIONS
 C
 C     STATE VARIABLES
 C
-      IF ((TIME(1).EQ.ZERO).AND.(KSTEP.EQ.1)) THEN
-      CALL INITIALIZE(STATEV)
+      TOL = 1.0E-8
+      IF ((TIME(1).LT.TOL).AND.(KSTEP.EQ.1)) THEN
+      CALL INITIALIZE(STATEV, VV)
       ENDIF
 C        READ STATEV
       CALL SDVREAD(STATEV,VV)
-C      
+C
+
 C----------------------------------------------------------------------
 C---------------------------- KINEMATICS ------------------------------
 C----------------------------------------------------------------------
@@ -268,6 +270,7 @@ C      PK2 STRESS
 C      CAUCHY STRESS
       CALL SIGVOL(SVOL,PV,UNIT2,NDI)
 C
+
 C---- ISOCHORIC -------------------------------------------------------
 C      PK2 STRESS
       CALL PK2ISO(PKISO,PKFIC,PROJL,DET,NDI)

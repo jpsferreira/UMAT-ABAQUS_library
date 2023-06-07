@@ -36,6 +36,8 @@ DFGRD1(3,3)= 1.0D0/DFGRD1(1,1)
 !
 time(1)=0.d0
 time(2)=0.d0
+dtime = 0.1d0
+kstep = 1
 call UEXTERNALDB(0,0,time,0.D0,0,0)
 !
 ! MATERIAL PROPERTIES

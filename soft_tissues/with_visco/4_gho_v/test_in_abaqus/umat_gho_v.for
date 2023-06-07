@@ -15,7 +15,7 @@ C
 C
       RETURN
       END SUBROUTINE SIGVOL
-       SUBROUTINE INITIALIZE(STATEV)
+       SUBROUTINE INITIALIZE(STATEV, VV)
 C
       IMPLICIT NONE
       INCLUDE 'param_umat.inc'
@@ -23,10 +23,13 @@ C
 C      COMMON /KCOMMON/KBLOCK
 C
 C      DOUBLE PRECISION TIME(2),KSTEP
-      INTEGER I1,POS,POS1,POS2,POS3
+      INTEGER I1,POS,POS1,VV
       DOUBLE PRECISION STATEV(NSDV)
+C        read your sdvs here. they should be allocated. 
+C          after the viscous terms (only if you use viscosity check hvread)
+        POS1=9*VV
 C        DETERMINANT
-        STATEV(1)=ONE    
+        STATEV(POS1+1)=ONE    
 C     
       RETURN
 C
@@ -709,10 +712,11 @@ C>    VISCOUS DISSIPATION: STRESS RELAXATION TENSORS
       IMPLICIT NONE
       INCLUDE 'param_umat.inc'
 C
+      INTEGER I1,J1,NDI
       DOUBLE PRECISION QV(NDI,NDI),HV(NDI,NDI),PKISO(NDI,NDI),
      1                 HV0(NDI,NDI)
       DOUBLE PRECISION DTIME,TETA,TAU,AUX1,AUX
-      INTEGER I1,J1,NDI
+
 C
       QV=ZERO
       HV=ZERO
@@ -860,13 +864,13 @@ C>    VISCOUS DISSIPATION: MAXWELL SPRINGS AND DASHPOTS SCHEME
       IMPLICIT NONE
       INCLUDE 'param_umat.inc'
 C
+      INTEGER I1,J1,K1,L1,NDI,VV,V1
       DOUBLE PRECISION PK(NDI,NDI),PKVOL(NDI,NDI),PKISO(NDI,NDI),
      1                  CMAT(NDI,NDI,NDI,NDI),CMATVOL(NDI,NDI,NDI,NDI),
      2                  CMATISO(NDI,NDI,NDI,NDI),VSCPROPS(6)
       DOUBLE PRECISION Q(NDI,NDI),QV(NDI,NDI),HV(NDI,NDI),
      1                  HV0(NDI,NDI),STATEV(NSDV)
       DOUBLE PRECISION DTIME,TETA,TAU,AUX,AUXC
-      INTEGER I1,J1,K1,L1,NDI,VV,V1
 C      
       Q=ZERO
       QV=ZERO
@@ -891,6 +895,7 @@ C
       Q=Q+QV
 C
       END DO
+
 C              
       AUXC=ONE+AUXC
       PK=PKVOL+PKISO
@@ -1050,7 +1055,7 @@ C
      4 FIBORI(NELEM,4)
 C
       DOUBLE PRECISION SSE, SPD, SCD, RPL, DRPLDT, DTIME, TEMP,
-     1                 DTEMP,PNEWDT,CELENT
+     1                 DTEMP,PNEWDT,CELENT, TOL
 C
       INTEGER NTERM
 C
@@ -1182,12 +1187,14 @@ C     NUMERICAL COMPUTATIONS
 C
 C     STATE VARIABLES
 C
-      IF ((TIME(1).EQ.ZERO).AND.(KSTEP.EQ.1)) THEN
-      CALL INITIALIZE(STATEV)
+      TOL = 1.0E-8
+      IF ((TIME(1).LT.TOL).AND.(KSTEP.EQ.1)) THEN
+      CALL INITIALIZE(STATEV, VV)
       ENDIF
 C        READ STATEV
       CALL SDVREAD(STATEV,VV)
-C      
+C
+
 C----------------------------------------------------------------------
 C---------------------------- KINEMATICS ------------------------------
 C----------------------------------------------------------------------
@@ -1267,6 +1274,7 @@ C      PK2 STRESS
 C      CAUCHY STRESS
       CALL SIGVOL(SVOL,PV,UNIT2,NDI)
 C
+
 C---- ISOCHORIC -------------------------------------------------------
 C      PK2 STRESS
       CALL PK2ISO(PKISO,PKFIC,PROJL,DET,NDI)

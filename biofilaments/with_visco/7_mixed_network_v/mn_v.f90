@@ -131,6 +131,8 @@ RHO=0.D0
 time(1)=0.d0
 time(2)=0.d0
 dtime = 0.1d0
+kstep = 1
+dtime = 0.1d0
 call UEXTERNALDB(0,0,time,0.D0,0,0)
 !
  CALL UMAT(STRESS,STATEV,DDSDDE,SSE,SPD,SCD,RPL,DDSDDT, DRPLDE,DRPLDT,STRAN,     &
