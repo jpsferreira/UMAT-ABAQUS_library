@@ -18,4 +18,4 @@ materials/filamentous_network/biofilament_affine_model/vonmises_distribution_sim
 *.pmg
 *.log
 *.prt
-
+*.DS_Store
