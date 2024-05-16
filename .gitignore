@@ -13,3 +13,9 @@
 materials/filamentous_network/biofilament_affine_model/factin_affine_network.nb
 materials/filamentous_network/biofilament_affine_model/network_test.nb
 materials/filamentous_network/biofilament_affine_model/vonmises_distribution_simple.nb
+*.csv
+*.o
+*.pmg
+*.log
+*.prt
+
