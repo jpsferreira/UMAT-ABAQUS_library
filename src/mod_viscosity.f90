@@ -44,10 +44,13 @@ contains
     real(dp) :: tau, theta, aux_c, branch_aux
     integer  :: v1, i, j, k, l, pos
 
+    integer :: n_eff
+
     q     = ZERO
     aux_c = ZERO
+    n_eff = min(n_branches, MAX_VISCO_BRANCHES)
 
-    do v1 = 1, n_branches
+    do v1 = 1, n_eff
       tau   = vscprops(2*v1 - 1)
       theta = vscprops(2*v1)
 
@@ -95,10 +98,17 @@ contains
   subroutine relax_branch(qv, hv, aux_stiff, hv0, pkiso, dtime, tau, theta)
     real(dp), intent(out) :: qv(3,3), hv(3,3), aux_stiff
     real(dp), intent(in)  :: hv0(3,3), pkiso(3,3), dtime, tau, theta
-    real(dp) :: decay
+    real(dp) :: decay, eff_tau
+    real(dp), parameter :: TINY_TAU = 1.0e-12_dp
     integer :: i, j
 
-    decay     = exp(-dtime / (TWO*tau))
+    ! Guard against non-positive or extremely small relaxation times
+    if (tau <= TINY_TAU) then
+      decay = ZERO
+    else
+      eff_tau = max(tau, TINY_TAU)
+      decay   = exp(-dtime / (TWO*eff_tau))
+    end if
     aux_stiff = theta * decay
 
     do i = 1, 3

@@ -265,9 +265,9 @@ contains
 
     pi = FOUR * atan(ONE)
     if (abs(b_param) < 1.0e-10_dp) then
-      rho = ONE
+      rho = efi
     else
-      rho = FOUR * sqrt(b_param / (TWO*pi)) * exp(b_param*(cos(TWO*angle) + ONE))
+      rho = efi * FOUR * sqrt(b_param / (TWO*pi)) * exp(b_param*(cos(TWO*angle) + ONE))
     end if
   end subroutine orientation_density
 
@@ -290,19 +290,22 @@ contains
   !> @param[in]  filprops  Filament properties: [L, R0, mu0, beta, B0, lambda0]
   !> @param[in]  net_density Network number density N
   !> @param[in]  b_orient   Orientation distribution parameter
-  !> @param[in]  efi    Preferred direction angle
+  !> @param[in]  efi        Orientation density scaling factor
+  !> @param[in]  prefdir    Preferred direction (3) in deformed config
   subroutine affine_network(sfic, cfic, f, mf0, rw, nwp, det, &
-                            filprops, net_density, b_orient, efi)
+                            filprops, net_density, b_orient, efi, prefdir)
     real(dp), intent(out) :: sfic(3,3), cfic(3,3,3,3)
     real(dp), intent(in)  :: f(3,3), det
     integer,  intent(in)  :: nwp
     real(dp), intent(in)  :: mf0(:,:), rw(:)
     real(dp), intent(in)  :: filprops(6), net_density, b_orient, efi
+    real(dp), intent(in)  :: prefdir(3)
 
     real(dp) :: pi, coeff
     real(dp) :: ll, r0, mu0, beta, b0, lambda0
     real(dp) :: mfi(3), m0i(3), lambdai, fi, ffi, dwi, ddwi, rho, angle
     real(dp) :: sfili(3,3), cfili(3,3,3,3)
+    real(dp) :: pd(3), pd_norm
     integer  :: ip, j, k, l, m
 
     ll      = filprops(1)
@@ -315,6 +318,11 @@ contains
     pi    = FOUR * atan(ONE)
     coeff = net_density / det * FOUR * pi
 
+    ! Compute deformed preferred direction
+    pd = matmul(f, prefdir)
+    pd_norm = sqrt(dot_product(pd, pd))
+    if (pd_norm > ZERO) pd = pd / pd_norm
+
     sfic = ZERO
     cfic = ZERO
 
@@ -322,9 +330,7 @@ contains
       m0i = mf0(ip, :)
 
       call deformed_filament(lambdai, mfi, m0i, f)
-
-      ! Compute angle for orientation density (simplified: use m0 angle)
-      angle = ZERO  ! Default isotropic; caller can provide oriented density
+      call compute_bangle(angle, mfi, pd)
       call orientation_density(rho, angle, b_orient, efi)
 
       call filament_force(fi, ffi, dwi, ddwi, lambdai, lambda0, ll, r0, mu0, beta, b0)

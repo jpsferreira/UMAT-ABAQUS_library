@@ -156,7 +156,7 @@ contains
         coef  = TWO * params(2*i1-1) / (FOUR * gamma**2)
         ! Strain energy sums over all 3 eigenvalues per Ogden term
         do k1 = 1, 3
-          sseiso = sseiso + coef * (ps(k1)**alpha - ONE)
+          sseiso = sseiso + coef * (ps(k1)**gamma - ONE)
         end do
         do k1 = 1, 3
           dudi1 = dudi1 + coef*gamma*(ps(k1)**(gamma+ONE)) / dd(k1)
@@ -233,7 +233,7 @@ contains
         gamma05 = gamma04 - ONE
 
         do k1 = 1, 3
-          sseiso = sseiso + coef * (ps(k1)**alpha - ONE)
+          sseiso = sseiso + coef * (ps(k1)**gamma - ONE)
         end do
 
         duda = gamma*bb**(-TWO*gamma1) &
@@ -289,7 +289,7 @@ contains
         c02 = (ONE/240.0_dp)*(gamma*gamma - ONE)*(gamma*gamma - 5.0_dp*gamma + 6.0_dp)
 
         do k1 = 1, 3
-          sseiso = sseiso + coef*(ps(k1)**alpha - ONE)
+          sseiso = sseiso + coef*(ps(k1)**gamma - ONE)
         end do
         dudi1 = dudi1 + coef*gamma**2*( &
           c10 + TWO*c20*(ci1 - THREE) &

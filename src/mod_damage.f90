@@ -32,7 +32,7 @@ contains
 
     if (sef >= sef0) then
       dmg_red  = ONE / (ONE + exp(beta_d * (sef - psi_half)))
-      dmg_diff = dmg_red * (dmg_red - ONE)
+      dmg_diff = -beta_d * dmg_red * (ONE - dmg_red)
       sef0     = sef
       dmg      = ONE - dmg_red
     end if

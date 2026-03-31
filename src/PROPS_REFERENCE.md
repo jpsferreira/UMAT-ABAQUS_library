@@ -45,7 +45,7 @@ to combine through the ABAQUS `*USER MATERIAL` property array (PROPS).
 | ID | Model       | Parameters                                               | Count |
 |----|-------------|----------------------------------------------------------|-------|
 | 0  | None        | —                                                        | 0     |
-| 1  | Affine      | PHI, N, B_orient, EFI, L, R0, μ0, β, B0, λ0            | 10    |
+| 1  | Affine      | PHI, N, B_orient, EFI, pdir_x, pdir_y, pdir_z, L, R0, μ0, β, B0, λ0 | 13 |
 | 2  | Non-affine  | PHI, N, B_orient, EFI, PP, L, R0, μ0, β, B0, λ0        | 11    |
 
 **Angular integration** (self-contained, no external files needed):
@@ -56,7 +56,7 @@ to combine through the ABAQUS `*USER MATERIAL` property array (PROPS).
 | 6  | Non-affine-AI    | PHI, N, PP, factor, L, R0, μ0, β, B0, λ0                            | 10    |
 
 - `factor` = icosahedron refinement level (integer). factor=6 gives ~720 integration points.
-- `pdir` = preferred direction (reference config) for orientation density in affine-AI.
+- `pdir` = preferred direction (reference config) for orientation density in affine models.
 
 ### Damage (DAMAGE_TYPE)
 

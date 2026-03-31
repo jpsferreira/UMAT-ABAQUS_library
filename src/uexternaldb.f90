@@ -11,7 +11,6 @@
 
 subroutine uexternaldb(lop, lrestart, time, dtime, kstep, kinc)
 
-  implicit none
   include 'aba_param.inc'
 
   integer, intent(in out) :: lop, lrestart, kstep, kinc
@@ -20,7 +19,7 @@ subroutine uexternaldb(lop, lrestart, time, dtime, kstep, kinc)
 
   ! Maximum quadrature points (must match umat_builder network_contribution)
   integer, parameter :: MAX_NWP  = 720
-  integer, parameter :: MAX_ELEM = 1
+  integer, parameter :: MAX_ELEM = 100000
 
   double precision :: mf0(MAX_NWP, 3), rw(MAX_NWP)
   double precision :: prefdir(MAX_ELEM, 4)

@@ -287,8 +287,8 @@ subroutine umat(stress, statev, ddsdde, sse, spd, scd, &
                               phi_net, snet, cnet)
     ! Blend: total = (1-PHI)*matrix + PHI*network
     ! Network stress/stiffness are already in fictitious spatial frame
-    sfic  = (ONE - phi_net) * sfic  + snet
-    cfic  = (ONE - phi_net) * cfic  + cnet
+    sfic  = (ONE - phi_net) * sfic  + phi_net * snet
+    cfic  = (ONE - phi_net) * cfic  + phi_net * cnet
     pkfic = (ONE - phi_net) * pkfic  ! PK2 only has matrix part
   end if
 
@@ -313,6 +313,10 @@ subroutine umat(stress, statev, ddsdde, sse, spd, scd, &
     sfic  = dmg_red * sfic
     cmfic = dmg_red * cmfic
     cfic  = dmg_red * cfic
+
+    ! Scale strain energy for consistency with damaged stress
+    sseiso   = dmg_red * sseiso
+    sseaniso = dmg_red * sseaniso
   end if
 
   ! ============================================================================
@@ -350,6 +354,8 @@ subroutine umat(stress, statev, ddsdde, sse, spd, scd, &
   ! The viscous model operates on the material frame (PK2 + material tangent).
   ! It modifies PK2 by adding viscous overstress and scales the isochoric
   ! material tangent. We then push-forward the result to the spatial frame.
+  ! Note: viscosity applies to the continuum (matrix) part only. If a network
+  ! model is active, the network spatial contribution is added back afterwards.
   if (n_visco > 0) then
     vscprops = ZERO
     do i = 1, min(n_visco, MAX_VISCO_BRANCHES)
@@ -363,7 +369,8 @@ subroutine umat(stress, statev, ddsdde, sse, spd, scd, &
     if (damage_type > 0) sdv_offset_visco = 3
 
     ! visco_maxwell returns modified PK2 (pk2_visc) and material tangent (cmat_visc)
-    call visco_maxwell(pk2_visc, cmat_visc, n_visco, pkvol, pkiso, &
+    call visco_maxwell(pk2_visc, cmat_visc, &
+                       min(n_visco, MAX_VISCO_BRANCHES), pkvol, pkiso, &
                        cmvol, cmiso, dtime, vscprops, statev, sdv_offset_visco)
 
     ! Push-forward to get spatial quantities
@@ -376,6 +383,14 @@ subroutine umat(stress, statev, ddsdde, sse, spd, scd, &
     ! Override elastic results with viscous-augmented versions
     sigma    = sigma_visc
     ddsigdde = cspatial_visc + cjr
+
+    ! Re-add network spatial contribution (viscosity applies to matrix only)
+    if (network_type > 0) then
+      call sig_iso(siso, sfic, proje)
+      call set_iso(ciso, cfic, proje, siso, sfic, unit2)
+      sigma    = sigma    + phi_net * siso
+      ddsigdde = ddsigdde + phi_net * ciso
+    end if
   end if
 
   ! ============================================================================
@@ -414,15 +429,18 @@ subroutine network_contribution(network_type, props, ip, distgr, det, &
 
   real(dp) :: net_density, b_orient, efi, pp_naff
   real(dp) :: filprops(6)
-  real(dp) :: prefdir_ai(3)
+  real(dp) :: prefdir_net(3)
   integer  :: factor_ai
 
   ! Quadrature data loaded via UEXTERNALDB into COMMON blocks (for RW types)
-  integer, parameter :: MAX_NWP = 720
+  integer, parameter :: MAX_NWP  = 720
+  integer, parameter :: MAX_ELEM = 100000
   real(dp) :: mf0(MAX_NWP, 3), rw(MAX_NWP)
+  real(dp) :: prefdir_db(MAX_ELEM, 4)
   integer  :: nwp_active
   common /kfil/  mf0
   common /kfilr/ rw
+  common /kfilp/ prefdir_db
   common /knwp/  nwp_active
 
   snet = ZERO
@@ -430,20 +448,23 @@ subroutine network_contribution(network_type, props, ip, distgr, det, &
 
   select case (network_type)
   case (1) ! Affine (quadrature weights)
-    phi_net     = props(ip)
-    net_density = props(ip+1)
-    b_orient    = props(ip+2)
-    efi         = props(ip+3)
-    filprops(1) = props(ip+4)   ! L
-    filprops(2) = props(ip+5)   ! R0
-    filprops(3) = props(ip+6)   ! mu0
-    filprops(4) = props(ip+7)   ! beta
-    filprops(5) = props(ip+8)   ! B0
-    filprops(6) = props(ip+9)   ! lambda0
-    ip = ip + 10
+    phi_net        = props(ip)
+    net_density    = props(ip+1)
+    b_orient       = props(ip+2)
+    efi            = props(ip+3)
+    prefdir_net(1) = props(ip+4)   ! preferred direction
+    prefdir_net(2) = props(ip+5)
+    prefdir_net(3) = props(ip+6)
+    filprops(1)    = props(ip+7)   ! L
+    filprops(2)    = props(ip+8)   ! R0
+    filprops(3)    = props(ip+9)   ! mu0
+    filprops(4)    = props(ip+10)  ! beta
+    filprops(5)    = props(ip+11)  ! B0
+    filprops(6)    = props(ip+12)  ! lambda0
+    ip = ip + 13
 
     call affine_network(snet, cnet, distgr, mf0, rw, nwp_active, det, &
-                        filprops, net_density, b_orient, efi)
+                        filprops, net_density, b_orient, efi, prefdir_net)
 
   case (2) ! Non-affine (quadrature weights)
     phi_net     = props(ip)
