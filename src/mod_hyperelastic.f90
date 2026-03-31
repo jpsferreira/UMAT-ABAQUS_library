@@ -99,7 +99,7 @@ contains
     real(dp) :: d2dad2i2, d2dbd2i2
     real(dp) :: duda, dudb, d2duda, d2dudadb, d2dudb
     real(dp) :: v1, v2, v3, v4, v5, v6, v7
-    real(dp) :: gamma1, gamma2, gamma3, gamma4
+    real(dp) :: gamma1, gamma2, gamma3
     real(dp) :: gamma01, gamma02, gamma03, gamma04, gamma05
     real(dp) :: dd(3)
 
@@ -154,7 +154,10 @@ contains
         alpha = params(2*i1)
         gamma = HALF * alpha
         coef  = TWO * params(2*i1-1) / (FOUR * gamma**2)
-        sseiso = sseiso + coef * (ps(i1)**alpha - ONE)
+        ! Strain energy sums over all 3 eigenvalues per Ogden term
+        do k1 = 1, 3
+          sseiso = sseiso + coef * (ps(k1)**alpha - ONE)
+        end do
         do k1 = 1, 3
           dudi1 = dudi1 + coef*gamma*(ps(k1)**(gamma+ONE)) / dd(k1)
           dudi2 = dudi2 - coef*gamma*(ps(k1)**gamma) / dd(k1)
@@ -229,7 +232,9 @@ contains
         gamma03 = gamma02 - ONE; gamma04 = gamma03 - ONE
         gamma05 = gamma04 - ONE
 
-        sseiso = sseiso + coef * (ps(i1)**alpha - ONE)
+        do k1 = 1, 3
+          sseiso = sseiso + coef * (ps(k1)**alpha - ONE)
+        end do
 
         duda = gamma*bb**(-TWO*gamma1) &
              + gamma*gamma01*bb**gamma02 &
@@ -283,7 +288,9 @@ contains
         c20 = (ONE/240.0_dp)*(gamma*gamma - ONE)*(gamma*gamma + 5.0_dp*gamma + 6.0_dp)
         c02 = (ONE/240.0_dp)*(gamma*gamma - ONE)*(gamma*gamma - 5.0_dp*gamma + 6.0_dp)
 
-        sseiso = sseiso + coef*(ps(i1)**alpha - ONE)
+        do k1 = 1, 3
+          sseiso = sseiso + coef*(ps(k1)**alpha - ONE)
+        end do
         dudi1 = dudi1 + coef*gamma**2*( &
           c10 + TWO*c20*(ci1 - THREE) &
         + c11*((ci2 - THREE) - 0.125_dp*(ci1+ci2-6.0_dp)**2))

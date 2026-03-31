@@ -291,7 +291,7 @@ contains
     real(dp), intent(out) :: sfic(3,3), cfic(3,3,3,3)
     real(dp), intent(in)  :: f(3,3), det
     integer,  intent(in)  :: nwp
-    real(dp), intent(in)  :: mf0(nwp,3), rw(nwp)
+    real(dp), intent(in)  :: mf0(:,:), rw(:)
     real(dp), intent(in)  :: filprops(6), net_density, b_orient, efi
 
     real(dp) :: pi, coeff
@@ -355,7 +355,7 @@ contains
     real(dp), intent(out) :: sfic(3,3), cfic(3,3,3,3)
     real(dp), intent(in)  :: f(3,3), det
     integer,  intent(in)  :: nwp
-    real(dp), intent(in)  :: mf0(nwp,3), rw(nwp)
+    real(dp), intent(in)  :: mf0(:,:), rw(:)
     real(dp), intent(in)  :: filprops(6), net_density, b_orient, efi, pp
 
     real(dp) :: pi, coeff

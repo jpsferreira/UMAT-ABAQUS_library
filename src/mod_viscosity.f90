@@ -38,7 +38,7 @@ contains
     real(dp), intent(in)    :: pkvol(3,3), pkiso(3,3)
     real(dp), intent(in)    :: cmatvol(3,3,3,3), cmatiso(3,3,3,3)
     real(dp), intent(in)    :: dtime, vscprops(2*MAX_VISCO_BRANCHES)
-    real(dp), intent(inout) :: statev(:)
+    real(dp), intent(inout) :: statev(*)
 
     real(dp) :: q(3,3), qv(3,3), hv(3,3), hv0(3,3)
     real(dp) :: tau, theta, aux_c, branch_aux
@@ -112,7 +112,7 @@ contains
   !> Read a 3x3 hidden stress tensor from the state variable array.
   subroutine hv_read(hv, statev, pos)
     real(dp), intent(out) :: hv(3,3)
-    real(dp), intent(in)  :: statev(:)
+    real(dp), intent(in)  :: statev(*)
     integer,  intent(in)  :: pos
     integer :: i, j, idx
 
@@ -127,7 +127,7 @@ contains
 
   !> Write a 3x3 hidden stress tensor to the state variable array.
   subroutine hv_write(statev, hv, pos)
-    real(dp), intent(inout) :: statev(:)
+    real(dp), intent(inout) :: statev(*)
     real(dp), intent(in)    :: hv(3,3)
     integer,  intent(in)    :: pos
     integer :: i, j, idx
