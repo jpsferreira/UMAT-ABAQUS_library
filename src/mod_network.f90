@@ -16,15 +16,20 @@ module mod_network
   public :: pullforce_brent
   public :: evalg
 
-  ! Network assembly
+  ! Network assembly — quadrature weights (RW)
   public :: affine_network
   public :: nonaffine_network
+
+  ! Network assembly — angular integration (AI, icosahedron)
+  public :: affine_network_ai
+  public :: nonaffine_network_ai
 
   ! Helper routines
   public :: deformed_filament
   public :: filament_stress_fic
   public :: filament_stiffness_fic
   public :: orientation_density
+  public :: compute_bangle
 
 contains
 
@@ -439,5 +444,347 @@ contains
       end do
     end do
   end subroutine nonaffine_network
+
+  !> Compute the angle between a deformed filament direction and a preferred direction.
+  subroutine compute_bangle(angle, mfi, prefdir)
+    real(dp), intent(out) :: angle
+    real(dp), intent(in)  :: mfi(3), prefdir(3)
+    real(dp) :: mfa(3), pd(3), dnorm, cosang
+
+    ! Normalize filament direction
+    dnorm = sqrt(dot_product(mfi, mfi))
+    if (dnorm > ZERO) then
+      mfa = mfi / dnorm
+    else
+      mfa = ZERO
+    end if
+
+    ! Normalize preferred direction
+    dnorm = sqrt(dot_product(prefdir, prefdir))
+    if (dnorm > ZERO) then
+      pd = prefdir / dnorm
+    else
+      pd = ZERO
+    end if
+
+    cosang = dot_product(mfa, pd)
+    cosang = max(-ONE, min(ONE, cosang))
+    angle  = acos(cosang)
+  end subroutine compute_bangle
+
+  ! ============================================================================
+  ! AFFINE NETWORK ASSEMBLY — ANGULAR INTEGRATION (ICOSAHEDRON)
+  ! ============================================================================
+
+  !> Assemble affine network using icosahedron-based angular integration.
+  !>
+  !> Instead of pre-loaded quadrature directions and weights, this variant
+  !> dynamically subdivides an icosahedron and uses spherical triangle areas
+  !> as integration weights. No external input files are needed.
+  !>
+  !> @param[out] sfic        Fictitious Cauchy stress (3x3)
+  !> @param[out] cfic        Fictitious spatial elasticity tensor (3x3x3x3)
+  !> @param[in]  f           Distortion gradient (3x3)
+  !> @param[in]  det         Jacobian determinant
+  !> @param[in]  filprops    Filament properties: [L, R0, mu0, beta, B0, lambda0]
+  !> @param[in]  net_density Network number density N
+  !> @param[in]  b_orient    Orientation distribution parameter
+  !> @param[in]  efi         Orientation density scaling
+  !> @param[in]  factor      Icosahedron refinement factor
+  !> @param[in]  prefdir     Preferred direction (3) for orientation density
+  subroutine affine_network_ai(sfic, cfic, f, det, &
+                               filprops, net_density, b_orient, efi, factor, prefdir)
+    use mod_icosahedron, only: icos_shape, sphere01_triangle_project, &
+                               sphere01_triangle_vertices_to_area, &
+                               ICOS_POINT_NUM, ICOS_EDGE_NUM, ICOS_FACE_NUM, &
+                               ICOS_FACE_ORDER_MAX
+    real(dp), intent(out) :: sfic(3,3), cfic(3,3,3,3)
+    real(dp), intent(in)  :: f(3,3), det
+    real(dp), intent(in)  :: filprops(6), net_density, b_orient, efi
+    integer,  intent(in)  :: factor
+    real(dp), intent(in)  :: prefdir(3)
+
+    real(dp) :: point_coord(3, ICOS_POINT_NUM)
+    integer  :: edge_point(2, ICOS_EDGE_NUM)
+    integer  :: face_order(ICOS_FACE_NUM)
+    integer  :: face_point(ICOS_FACE_ORDER_MAX, ICOS_FACE_NUM)
+
+    real(dp) :: ll, r0, mu0, beta, b0, lambda0
+    real(dp) :: coeff, pi_val
+    real(dp) :: a_xyz(3), b_xyz(3), c_xyz(3)
+    real(dp) :: a2_xyz(3), b2_xyz(3), c2_xyz(3)
+    real(dp) :: node_xyz(3), ai
+    real(dp) :: mfi(3), m0i(3), lambdai
+    real(dp) :: fi, ffi, dwi, ddwi, rho, angle
+    real(dp) :: sfili(3,3), cfili(3,3,3,3)
+    real(dp) :: pd(3), pd_norm
+    integer  :: face, ia, ib, ic, f1, f2, f3
+    integer  :: j, k, l, m
+
+    ll      = filprops(1)
+    r0      = filprops(2)
+    mu0     = filprops(3)
+    beta    = filprops(4)
+    b0      = filprops(5)
+    lambda0 = filprops(6)
+
+    pi_val = FOUR * atan(ONE)
+    coeff  = net_density / det
+
+    sfic = ZERO
+    cfic = ZERO
+
+    ! Compute deformed preferred direction
+    pd = matmul(f, prefdir)
+    pd_norm = sqrt(dot_product(pd, pd))
+    if (pd_norm > ZERO) pd = pd / pd_norm
+
+    ! Set up icosahedron
+    call icos_shape(point_coord, edge_point, face_order, face_point)
+
+    ! Loop over icosahedron faces
+    do face = 1, ICOS_FACE_NUM
+      ia = face_point(1, face)
+      ib = face_point(2, face)
+      ic = face_point(3, face)
+
+      a_xyz = point_coord(:, ia)
+      b_xyz = point_coord(:, ib)
+      c_xyz = point_coord(:, ic)
+
+      ! Same-orientation subtriangles
+      do f3 = 1, 3*factor - 2, 3
+        do f2 = 1, 3*factor - f3 - 1, 3
+          f1 = 3*factor - f3 - f2
+
+          call sphere01_triangle_project(a_xyz, b_xyz, c_xyz, f1, f2, f3, node_xyz)
+
+          call sphere01_triangle_project(a_xyz, b_xyz, c_xyz, f1+2, f2-1, f3-1, a2_xyz)
+          call sphere01_triangle_project(a_xyz, b_xyz, c_xyz, f1-1, f2+2, f3-1, b2_xyz)
+          call sphere01_triangle_project(a_xyz, b_xyz, c_xyz, f1-1, f2-1, f3+2, c2_xyz)
+
+          call sphere01_triangle_vertices_to_area(a2_xyz, b2_xyz, c2_xyz, ai)
+
+          m0i = node_xyz
+          call deformed_filament(lambdai, mfi, m0i, f)
+          call compute_bangle(angle, mfi, pd)
+          call orientation_density(rho, angle, b_orient, efi)
+          call filament_force(fi, ffi, dwi, ddwi, lambdai, lambda0, ll, r0, mu0, beta, b0)
+
+          call filament_stress_fic(sfili, rho, lambdai, dwi, mfi, ai)
+          call filament_stiffness_fic(cfili, rho, lambdai, dwi, ddwi, mfi, ai)
+
+          do j = 1, 3
+            do k = 1, 3
+              sfic(j,k) = sfic(j,k) + coeff * sfili(j,k)
+              do l = 1, 3
+                do m = 1, 3
+                  cfic(j,k,l,m) = cfic(j,k,l,m) + coeff * cfili(j,k,l,m)
+                end do
+              end do
+            end do
+          end do
+        end do
+      end do
+
+      ! Opposite-orientation subtriangles
+      do f3 = 2, 3*factor - 4, 3
+        do f2 = 2, 3*factor - f3 - 2, 3
+          f1 = 3*factor - f3 - f2
+
+          call sphere01_triangle_project(a_xyz, b_xyz, c_xyz, f1, f2, f3, node_xyz)
+
+          call sphere01_triangle_project(a_xyz, b_xyz, c_xyz, f1-2, f2+1, f3+1, a2_xyz)
+          call sphere01_triangle_project(a_xyz, b_xyz, c_xyz, f1+1, f2-2, f3+1, b2_xyz)
+          call sphere01_triangle_project(a_xyz, b_xyz, c_xyz, f1+1, f2+1, f3-2, c2_xyz)
+
+          call sphere01_triangle_vertices_to_area(a2_xyz, b2_xyz, c2_xyz, ai)
+
+          m0i = node_xyz
+          call deformed_filament(lambdai, mfi, m0i, f)
+          call compute_bangle(angle, mfi, pd)
+          call orientation_density(rho, angle, b_orient, efi)
+          call filament_force(fi, ffi, dwi, ddwi, lambdai, lambda0, ll, r0, mu0, beta, b0)
+
+          call filament_stress_fic(sfili, rho, lambdai, dwi, mfi, ai)
+          call filament_stiffness_fic(cfili, rho, lambdai, dwi, ddwi, mfi, ai)
+
+          do j = 1, 3
+            do k = 1, 3
+              sfic(j,k) = sfic(j,k) + coeff * sfili(j,k)
+              do l = 1, 3
+                do m = 1, 3
+                  cfic(j,k,l,m) = cfic(j,k,l,m) + coeff * cfili(j,k,l,m)
+                end do
+              end do
+            end do
+          end do
+        end do
+      end do
+    end do
+
+  end subroutine affine_network_ai
+
+  ! ============================================================================
+  ! NON-AFFINE NETWORK ASSEMBLY — ANGULAR INTEGRATION (ICOSAHEDRON)
+  ! ============================================================================
+
+  !> Assemble non-affine network using icosahedron-based angular integration.
+  !>
+  !> Like nonaffine_network, uses power-law stretch averaging but integrates
+  !> over dynamically generated icosahedron subtriangles instead of pre-loaded
+  !> quadrature points.
+  !>
+  !> @param[in] pp     Non-affinity exponent
+  !> @param[in] factor Icosahedron refinement factor
+  subroutine nonaffine_network_ai(sfic, cfic, f, det, &
+                                  filprops, net_density, pp, factor)
+    use mod_icosahedron, only: icos_shape, sphere01_triangle_project, &
+                               sphere01_triangle_vertices_to_area, &
+                               ICOS_POINT_NUM, ICOS_EDGE_NUM, ICOS_FACE_NUM, &
+                               ICOS_FACE_ORDER_MAX
+    real(dp), intent(out) :: sfic(3,3), cfic(3,3,3,3)
+    real(dp), intent(in)  :: f(3,3), det
+    real(dp), intent(in)  :: filprops(6), net_density, pp
+    integer,  intent(in)  :: factor
+
+    real(dp) :: point_coord(3, ICOS_POINT_NUM)
+    integer  :: edge_point(2, ICOS_EDGE_NUM)
+    integer  :: face_order(ICOS_FACE_NUM)
+    integer  :: face_point(ICOS_FACE_ORDER_MAX, ICOS_FACE_NUM)
+
+    real(dp) :: ll, r0, mu0, beta, b0, lambda0
+    real(dp) :: coeff
+    real(dp) :: a_xyz(3), b_xyz(3), c_xyz(3)
+    real(dp) :: a2_xyz(3), b2_xyz(3), c2_xyz(3)
+    real(dp) :: node_xyz(3), ai
+    real(dp) :: mfi(3), m0i(3), lambdai
+    real(dp) :: h2(3,3), h4(3,3,3,3), hi(3,3), hhi(3,3,3,3)
+    real(dp) :: lambda_sum, area_total, lambda_eff
+    real(dp) :: fi, ffi, dw, ddw
+    real(dp) :: scale_s, scale_c1, scale_c2
+    real(dp) :: aux_h, aux_hh
+    integer  :: face, ia, ib, ic, f1, f2, f3
+    integer  :: i, j, k, l
+
+    ll      = filprops(1)
+    r0      = filprops(2)
+    mu0     = filprops(3)
+    beta    = filprops(4)
+    b0      = filprops(5)
+    lambda0 = filprops(6)
+
+    h2 = ZERO
+    h4 = ZERO
+    lambda_sum = ZERO
+    area_total = ZERO
+
+    ! Set up icosahedron
+    call icos_shape(point_coord, edge_point, face_order, face_point)
+
+    ! Loop over icosahedron faces
+    do face = 1, ICOS_FACE_NUM
+      ia = face_point(1, face)
+      ib = face_point(2, face)
+      ic = face_point(3, face)
+
+      a_xyz = point_coord(:, ia)
+      b_xyz = point_coord(:, ib)
+      c_xyz = point_coord(:, ic)
+
+      ! Same-orientation subtriangles
+      do f3 = 1, 3*factor - 2, 3
+        do f2 = 1, 3*factor - f3 - 1, 3
+          f1 = 3*factor - f3 - f2
+
+          call sphere01_triangle_project(a_xyz, b_xyz, c_xyz, f1, f2, f3, node_xyz)
+          call sphere01_triangle_project(a_xyz, b_xyz, c_xyz, f1+2, f2-1, f3-1, a2_xyz)
+          call sphere01_triangle_project(a_xyz, b_xyz, c_xyz, f1-1, f2+2, f3-1, b2_xyz)
+          call sphere01_triangle_project(a_xyz, b_xyz, c_xyz, f1-1, f2-1, f3+2, c2_xyz)
+          call sphere01_triangle_vertices_to_area(a2_xyz, b2_xyz, c2_xyz, ai)
+
+          m0i = node_xyz
+          call deformed_filament(lambdai, mfi, m0i, f)
+          lambda_sum = lambda_sum + (lambdai**pp) * ai
+          area_total = area_total + ai
+
+          ! Structure tensors (hfilfic equivalent)
+          if (lambdai > ZERO) then
+            aux_h  = (lambdai**(pp - TWO)) * ai
+            aux_hh = (pp - TWO) * (lambdai**(pp - FOUR)) * ai
+            do i = 1, 3
+              do j = 1, 3
+                h2(i,j) = h2(i,j) + aux_h * mfi(i) * mfi(j)
+                do k = 1, 3
+                  do l = 1, 3
+                    h4(i,j,k,l) = h4(i,j,k,l) + aux_hh * mfi(i)*mfi(j)*mfi(k)*mfi(l)
+                  end do
+                end do
+              end do
+            end do
+          end if
+        end do
+      end do
+
+      ! Opposite-orientation subtriangles
+      do f3 = 2, 3*factor - 4, 3
+        do f2 = 2, 3*factor - f3 - 2, 3
+          f1 = 3*factor - f3 - f2
+
+          call sphere01_triangle_project(a_xyz, b_xyz, c_xyz, f1, f2, f3, node_xyz)
+          call sphere01_triangle_project(a_xyz, b_xyz, c_xyz, f1-2, f2+1, f3+1, a2_xyz)
+          call sphere01_triangle_project(a_xyz, b_xyz, c_xyz, f1+1, f2-2, f3+1, b2_xyz)
+          call sphere01_triangle_project(a_xyz, b_xyz, c_xyz, f1+1, f2+1, f3-2, c2_xyz)
+          call sphere01_triangle_vertices_to_area(a2_xyz, b2_xyz, c2_xyz, ai)
+
+          m0i = node_xyz
+          call deformed_filament(lambdai, mfi, m0i, f)
+          lambda_sum = lambda_sum + (lambdai**pp) * ai
+          area_total = area_total + ai
+
+          if (lambdai > ZERO) then
+            aux_h  = (lambdai**(pp - TWO)) * ai
+            aux_hh = (pp - TWO) * (lambdai**(pp - FOUR)) * ai
+            do i = 1, 3
+              do j = 1, 3
+                h2(i,j) = h2(i,j) + aux_h * mfi(i) * mfi(j)
+                do k = 1, 3
+                  do l = 1, 3
+                    h4(i,j,k,l) = h4(i,j,k,l) + aux_hh * mfi(i)*mfi(j)*mfi(k)*mfi(l)
+                  end do
+                end do
+              end do
+            end do
+          end if
+        end do
+      end do
+    end do
+
+    ! Effective stretch (normalized by total area)
+    lambda_sum = lambda_sum / area_total
+    lambda_eff = lambda_sum**(ONE / pp)
+
+    ! Evaluate single filament at effective stretch
+    call filament_force(fi, ffi, dw, ddw, lambda_eff, lambda0, ll, r0, mu0, beta, b0)
+
+    ! Assemble stress and stiffness
+    coeff    = net_density / det / area_total
+    scale_s  = coeff * dw * lambda_eff**(ONE - pp)
+    scale_c1 = coeff * dw * lambda_eff**(ONE - pp)
+    scale_c2 = coeff * (ddw * lambda_eff**(TWO*(ONE - pp)) &
+             - (pp - ONE) * dw * lambda_eff**(ONE - TWO*pp))
+
+    sfic = scale_s * h2
+    do i = 1, 3
+      do j = 1, 3
+        do k = 1, 3
+          do l = 1, 3
+            cfic(i,j,k,l) = scale_c1 * h4(i,j,k,l) + scale_c2 * h2(i,j)*h2(k,l)
+          end do
+        end do
+      end do
+    end do
+
+  end subroutine nonaffine_network_ai
 
 end module mod_network

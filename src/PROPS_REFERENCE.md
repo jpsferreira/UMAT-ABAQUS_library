@@ -40,11 +40,23 @@ to combine through the ABAQUS `*USER MATERIAL` property array (PROPS).
 
 ### Network (NETWORK_TYPE)
 
+**Quadrature-weight integration** (requires `sphere_intXXc.inp` loaded via UEXTERNALDB):
+
 | ID | Model       | Parameters                                               | Count |
 |----|-------------|----------------------------------------------------------|-------|
 | 0  | None        | —                                                        | 0     |
 | 1  | Affine      | PHI, N, B_orient, EFI, L, R0, μ0, β, B0, λ0            | 10    |
 | 2  | Non-affine  | PHI, N, B_orient, EFI, PP, L, R0, μ0, β, B0, λ0        | 11    |
+
+**Angular integration** (self-contained, no external files needed):
+
+| ID | Model            | Parameters                                                            | Count |
+|----|------------------|-----------------------------------------------------------------------|-------|
+| 5  | Affine-AI        | PHI, N, B_orient, EFI, factor, pdir_x, pdir_y, pdir_z, L, R0, μ0, β, B0, λ0 | 14 |
+| 6  | Non-affine-AI    | PHI, N, PP, factor, L, R0, μ0, β, B0, λ0                            | 10    |
+
+- `factor` = icosahedron refinement level (integer). factor=6 gives ~720 integration points.
+- `pdir` = preferred direction (reference config) for orientation density in affine-AI.
 
 ### Damage (DAMAGE_TYPE)
 
@@ -157,6 +169,30 @@ NSTATEV = 1 + 9×2 = 19
 
 NSTATEV = 3 + 9 = 12
 
+### Example 8: Affine network with angular integration (no external files)
+
+```
+*USER MATERIAL, CONSTANTS=21
+** KBULK, ISO, ANISO, NFIB, NET, DMG, NVISCO
+  500.0,  0,  0,  0,  5,  0,  0,
+** PHI, N, B_orient, EFI, factor, pdir_x, pdir_y, pdir_z
+  0.5,  1.0e6,  2.0,  1.0,  6,  1.0,  0.0,  0.0,
+** L, R0, mu0, beta, B0, lambda0
+  1.0,  0.1,  0.01,  2.0,  0.1,  1.0
+```
+
+### Example 9: Non-affine network with angular integration
+
+```
+*USER MATERIAL, CONSTANTS=17
+** KBULK, ISO, ANISO, NFIB, NET, DMG, NVISCO
+  500.0,  0,  0,  0,  6,  0,  0,
+** PHI, N, PP, factor
+  0.5,  1.0e6,  2.0,  6,
+** L, R0, mu0, beta, B0, lambda0
+  1.0,  0.1,  0.01,  2.0,  0.1,  1.0
+```
+
 ## State Variables (NSTATEV)
 
 | Range          | Content                                      |
@@ -181,7 +217,8 @@ mod_continuum       ← Stress/stiffness framework (vol/iso split, Voigt)
   ↓
 mod_hyperelastic    ← Isotropic SEFs (NH, MR, Ogden, Humphrey)
 mod_anisotropic     ← Fiber models (HGO, Humphrey-fiber)
-mod_network         ← Filament networks (affine, non-affine)
+mod_icosahedron     ← Icosahedron geometry for angular integration
+mod_network         ← Filament networks (affine, non-affine, AI variants)
 mod_damage          ← Damage evolution (sigmoid)
 mod_viscosity       ← Viscoelasticity (generalized Maxwell)
   ↓

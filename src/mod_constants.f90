@@ -27,11 +27,13 @@ module mod_constants
   integer, parameter :: ANISO_HUMPHREY  = 2
 
   ! Network models
-  integer, parameter :: NET_NONE        = 0
-  integer, parameter :: NET_AFFINE      = 1
-  integer, parameter :: NET_NONAFFINE   = 2
-  integer, parameter :: NET_MIXED       = 3
-  integer, parameter :: NET_CONTRACTILE = 4
+  integer, parameter :: NET_NONE           = 0
+  integer, parameter :: NET_AFFINE         = 1
+  integer, parameter :: NET_NONAFFINE      = 2
+  integer, parameter :: NET_MIXED          = 3
+  integer, parameter :: NET_CONTRACTILE    = 4
+  integer, parameter :: NET_AFFINE_AI      = 5
+  integer, parameter :: NET_NONAFFINE_AI   = 6
 
   ! Damage models
   integer, parameter :: DMG_NONE        = 0

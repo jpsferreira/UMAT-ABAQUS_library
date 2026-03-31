@@ -9,7 +9,8 @@
 !>  PROPS(2)  = ISO_TYPE       0=none, 1=NH, 2=MR, 3=Ogden, 4=Humphrey
 !>  PROPS(3)  = ANISO_TYPE     0=none, 1=HGO, 2=Humphrey-fiber
 !>  PROPS(4)  = N_FIBER_FAM    Number of fiber families (0, 1, or 2)
-!>  PROPS(5)  = NETWORK_TYPE   0=none, 1=affine, 2=non-affine
+!>  PROPS(5)  = NETWORK_TYPE   0=none, 1=affine, 2=non-affine,
+!>                             5=affine-AI, 6=non-affine-AI
 !>  PROPS(6)  = DAMAGE_TYPE    0=none, 1=sigmoid
 !>  PROPS(7)  = N_VISCO        Number of Maxwell branches (0 = none)
 !>  PROPS(8:) = [iso] [aniso x N_FAM] [network] [damage] [visco x N_VISCO]
@@ -401,7 +402,8 @@ end subroutine umat
 subroutine network_contribution(network_type, props, ip, distgr, det, &
                                 phi_net, snet, cnet)
   use mod_constants, only: dp, ZERO, ONE
-  use mod_network,   only: affine_network, nonaffine_network
+  use mod_network,   only: affine_network, nonaffine_network, &
+                           affine_network_ai, nonaffine_network_ai
 
   implicit none
   integer,  intent(in)    :: network_type
@@ -412,8 +414,10 @@ subroutine network_contribution(network_type, props, ip, distgr, det, &
 
   real(dp) :: net_density, b_orient, efi, pp_naff
   real(dp) :: filprops(6)
+  real(dp) :: prefdir_ai(3)
+  integer  :: factor_ai
 
-  ! Quadrature data loaded via UEXTERNALDB into COMMON blocks
+  ! Quadrature data loaded via UEXTERNALDB into COMMON blocks (for RW types)
   integer, parameter :: MAX_NWP = 720
   real(dp) :: mf0(MAX_NWP, 3), rw(MAX_NWP)
   integer  :: nwp_active
@@ -425,7 +429,7 @@ subroutine network_contribution(network_type, props, ip, distgr, det, &
   cnet = ZERO
 
   select case (network_type)
-  case (1) ! Affine
+  case (1) ! Affine (quadrature weights)
     phi_net     = props(ip)
     net_density = props(ip+1)
     b_orient    = props(ip+2)
@@ -441,7 +445,7 @@ subroutine network_contribution(network_type, props, ip, distgr, det, &
     call affine_network(snet, cnet, distgr, mf0, rw, nwp_active, det, &
                         filprops, net_density, b_orient, efi)
 
-  case (2) ! Non-affine
+  case (2) ! Non-affine (quadrature weights)
     phi_net     = props(ip)
     net_density = props(ip+1)
     b_orient    = props(ip+2)
@@ -457,6 +461,42 @@ subroutine network_contribution(network_type, props, ip, distgr, det, &
 
     call nonaffine_network(snet, cnet, distgr, mf0, rw, nwp_active, det, &
                            filprops, net_density, b_orient, efi, pp_naff)
+
+  case (5) ! Affine — angular integration (icosahedron)
+    phi_net        = props(ip)
+    net_density    = props(ip+1)
+    b_orient       = props(ip+2)
+    efi            = props(ip+3)
+    factor_ai      = nint(props(ip+4))  ! refinement factor
+    prefdir_ai(1)  = props(ip+5)        ! preferred direction
+    prefdir_ai(2)  = props(ip+6)
+    prefdir_ai(3)  = props(ip+7)
+    filprops(1)    = props(ip+8)   ! L
+    filprops(2)    = props(ip+9)   ! R0
+    filprops(3)    = props(ip+10)  ! mu0
+    filprops(4)    = props(ip+11)  ! beta
+    filprops(5)    = props(ip+12)  ! B0
+    filprops(6)    = props(ip+13)  ! lambda0
+    ip = ip + 14
+
+    call affine_network_ai(snet, cnet, distgr, det, &
+                           filprops, net_density, b_orient, efi, factor_ai, prefdir_ai)
+
+  case (6) ! Non-affine — angular integration (icosahedron)
+    phi_net        = props(ip)
+    net_density    = props(ip+1)
+    pp_naff        = props(ip+2)   ! non-affinity exponent
+    factor_ai      = nint(props(ip+3))  ! refinement factor
+    filprops(1)    = props(ip+4)   ! L
+    filprops(2)    = props(ip+5)   ! R0
+    filprops(3)    = props(ip+6)   ! mu0
+    filprops(4)    = props(ip+7)   ! beta
+    filprops(5)    = props(ip+8)   ! B0
+    filprops(6)    = props(ip+9)   ! lambda0
+    ip = ip + 10
+
+    call nonaffine_network_ai(snet, cnet, distgr, det, &
+                              filprops, net_density, pp_naff, factor_ai)
 
   case default
     phi_net = ZERO
