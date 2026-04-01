@@ -42,7 +42,8 @@ sudo apt install gcc gfortran make
 ## Repository structure
 
 ```
-src/                        Modular UMAT source (the main deliverable)
+generate.py                 Material law generator (main entry point)
+src/                        Modular UMAT source modules
   mod_constants.f90           Precision parameters and model type IDs
   mod_tensor.f90              Tensor algebra (contractions, push/pull, spectral)
   mod_kinematics.f90          Deformation measures (F, C, B, invariants, stretches)
@@ -57,70 +58,99 @@ src/                        Modular UMAT source (the main deliverable)
   uexternaldb.f90             UEXTERNALDB for loading quadrature data (RW networks)
   aba_param.inc               ABAQUS implicit typing include
   PROPS_REFERENCE.md          Full PROPS layout documentation with examples
-  Makefile                    Build rules
+  Makefile                    Build rules for module compilation
 
 soft_tissues/               Legacy single-file soft tissue UMATs
 biofilaments/               Legacy single-file filament network UMATs
 ```
 
-## Building
+## Generating a material law
 
-### For standalone compilation (testing outside ABAQUS)
+The `generate.py` script creates a self-contained directory with everything needed to test a material law both standalone and in ABAQUS.
 
-```bash
-cd src
-make            # Compiles all modules and object files into build/
-make clean      # Remove build artifacts
-```
-
-### For ABAQUS — single-file submission
+### From a built-in example
 
 ```bash
-cd src
-make abaqus_single    # Creates build/umat_all.f90
+python generate.py --example neo_hooke
 ```
 
-Then submit to ABAQUS:
+Available examples: `neo_hooke`, `mooney_rivlin`, `humphrey_hgo`, `ogden_3term`, `neo_hooke_damage`, `neo_hooke_visco`, `affine_network`.
+
+### From a JSON configuration
 
 ```bash
-abaqus job=mymodel user=src/build/umat_all.f90
+python generate.py my_material.json
 ```
 
-### For ABAQUS — direct source list
+Example `my_material.json`:
 
-Alternatively, list the source files in the ABAQUS environment file or compile them with `abaqus make`. The compilation order matters — modules must be compiled before files that `use` them. The correct order is given in the Makefile.
-
-## Quick start
-
-A minimal Neo-Hookean material with bulk modulus 1000 and shear parameter C10=10:
-
-```
-*USER MATERIAL, CONSTANTS=8
-** KBULK, ISO_TYPE, ANISO, NFIB, NET, DMG, NVISCO, C10
-  1000.0,  1,  0,  0,  0,  0,  0,  10.0
-*DEPVAR
-  1
-```
-
-A Humphrey matrix + HGO fiber family + sigmoid damage + 1 Maxwell branch:
-
-```
-*USER MATERIAL, CONSTANTS=23
-** KBULK, ISO, ANISO, NFIB, NET, DMG, NVISCO
-  500.0,  4,  1,  1,  0,  1,  1,
-** C10, C01 (Humphrey iso)
-  2.0,  1.5,
-** K1, K2, kappa, fiber_x, fiber_y, fiber_z
-  100.0,  10.0,  0.226,  1.0,  0.0,  0.0,
-** beta_damage, psi_half
-  5.0,  50.0,
-** tau, theta
-  0.5,  0.25
-*DEPVAR
-  12
+```json
+{
+  "name": "my_material",
+  "kbulk": 1000.0,
+  "iso_type": 1,
+  "iso_params": [10.0],
+  "aniso_type": 0,
+  "n_fiber_fam": 0,
+  "aniso_params": [],
+  "network_type": 0,
+  "network_params": [],
+  "damage_type": 0,
+  "damage_params": [],
+  "n_visco": 0,
+  "visco_params": [],
+  "test": {
+    "stretch_max": 1.5,
+    "gamma_max": 0.6,
+    "nsteps": 400,
+    "dtime": 0.01
+  }
+}
 ```
 
-See `src/PROPS_REFERENCE.md` for the complete parameter reference and more examples.
+### List available model types and parameters
+
+```bash
+python generate.py --list
+```
+
+### What gets generated
+
+```
+my_material/
+  umat.f90            Concatenated UMAT source (for ABAQUS user= submission)
+  test_umat.f90       Standalone test driver (uniaxial, biaxial, shear, simple shear)
+  Makefile            Build & run the standalone test
+  aba_param.inc       ABAQUS include file
+  config.json         Saved configuration (for regeneration)
+  abaqus/
+    cube.inp          Single C3D8 element mesh
+    sec.inp           *User Material card with PROPS values
+    bcs_uni.inp       Uniaxial boundary conditions
+    bcs_bi.inp        Biaxial boundary conditions
+    bcs_sh.inp        Shear boundary conditions
+    run.sh            ABAQUS submission script
+```
+
+### Running the standalone test
+
+```bash
+cd my_material
+make run          # Compiles umat.f90 + test_umat.f90, runs all load cases
+```
+
+Output files are written to `my_material/results/` (uniaxial.dat, biaxial.dat, shear.dat, simple_shear.dat).
+
+### Running in ABAQUS
+
+```bash
+cd my_material/abaqus
+./run.sh                    # Uniaxial (default)
+./run.sh bcs_bi.inp         # Biaxial
+./run.sh bcs_sh.inp         # Shear
+```
+
+See `src/PROPS_REFERENCE.md` for the full parameter reference.
 
 ### Network models — integration scheme choice
 
