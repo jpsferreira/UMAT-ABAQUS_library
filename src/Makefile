@@ -4,11 +4,9 @@
 #   make              Build all object files for linking with ABAQUS
 #   make clean        Remove build artifacts
 #
-# For ABAQUS (single-file submission):
-#   make abaqus_single   Concatenate all sources into one .f90 for abaqus user=
-#
-# For ABAQUS (pre-compiled):
-#   abaqus job=mymodel user=build/umat_all.f90
+# To generate a material law:
+#   python ../generate.py config.json
+#   python ../generate.py --example neo_hooke
 
 FC       = gfortran
 FFLAGS   = -O2 -ffree-form -fPIC
@@ -29,7 +27,7 @@ MODULES = \
 
 UMAT_OBJ = $(BUILDDIR)/umat_builder.o $(BUILDDIR)/uexternaldb.o
 
-.PHONY: all clean abaqus_single
+.PHONY: all clean
 
 all: $(BUILDDIR) $(MODULES) $(UMAT_OBJ)
 
@@ -72,14 +70,6 @@ $(BUILDDIR)/umat_builder.o: umat_builder.f90 $(MODULES)
 
 $(BUILDDIR)/uexternaldb.o: uexternaldb.f90
 	$(FC) $(FFLAGS) -c $< -o $@ -I$(BUILDDIR) -J$(BUILDDIR)
-
-# Concatenate all sources into a single file for ABAQUS user= submission
-abaqus_single: $(BUILDDIR)
-	cat mod_constants.f90 mod_tensor.f90 mod_kinematics.f90 \
-	    mod_continuum.f90 mod_hyperelastic.f90 mod_anisotropic.f90 \
-	    mod_icosahedron.f90 mod_network.f90 mod_damage.f90 mod_viscosity.f90 \
-	    umat_builder.f90 uexternaldb.f90 > $(BUILDDIR)/umat_all.f90
-	@echo "Created $(BUILDDIR)/umat_all.f90 — submit to ABAQUS with: abaqus job=X user=$(BUILDDIR)/umat_all.f90"
 
 clean:
 	rm -rf $(BUILDDIR)
