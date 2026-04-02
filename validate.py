@@ -26,8 +26,8 @@ ROOT = Path(__file__).resolve().parent
 
 PAIRS = {
     "neo_hooke": {
-        "legacy_umat": "soft_tissues/1_neo_hooke/umat_nh.for",
-        "legacy_inc": "soft_tissues/1_neo_hooke",
+        "legacy_umat": "legacy/soft_tissues/1_neo_hooke/umat_nh.for",
+        "legacy_inc": "legacy/soft_tissues/1_neo_hooke",
         "legacy_nprops": 9,
         "legacy_nstatev": 1,
         "legacy_props": [1000.0, 10.0, 0, 2.0, 0.835, 1.2, 7.0, 12.0, 2.0],
@@ -37,8 +37,8 @@ PAIRS = {
         "new_props": [1000.0, 1, 0, 0, 0, 0, 0, 10.0],
     },
     "mooney_rivlin": {
-        "legacy_umat": "soft_tissues/2_mooney_rivlin/umat_mr.for",
-        "legacy_inc": "soft_tissues/2_mooney_rivlin",
+        "legacy_umat": "legacy/soft_tissues/2_mooney_rivlin/umat_mr.for",
+        "legacy_inc": "legacy/soft_tissues/2_mooney_rivlin",
         "legacy_nprops": 10,
         "legacy_nstatev": 1,
         "legacy_props": [1000.0, 6.3, 0.012, 0, 2.0, 0.835, 1.2, 7.0, 12.0, 2.0],
@@ -48,8 +48,8 @@ PAIRS = {
         "new_props": [1000.0, 2, 0, 0, 0, 0, 0, 6.3, 0.012],
     },
     "neo_hooke_damage": {
-        "legacy_umat": "soft_tissues/with_damage/1_neo_hooke_d/umat_nh_d.for",
-        "legacy_inc": "soft_tissues/with_damage/1_neo_hooke_d",
+        "legacy_umat": "legacy/soft_tissues/with_damage/1_neo_hooke_d/umat_nh_d.for",
+        "legacy_inc": "legacy/soft_tissues/with_damage/1_neo_hooke_d",
         "legacy_nprops": 4,
         "legacy_nstatev": 3,
         "legacy_props": [1000.0, 10.0, 5.0, 50.0],
@@ -59,8 +59,8 @@ PAIRS = {
         "new_props": [1000.0, 1, 0, 0, 0, 1, 0, 10.0, 5.0, 50.0],
     },
     "neo_hooke_visco": {
-        "legacy_umat": "soft_tissues/with_visco/1_neo_hooke_v/umat_nh_v.for",
-        "legacy_inc": "soft_tissues/with_visco/1_neo_hooke_v",
+        "legacy_umat": "legacy/soft_tissues/with_visco/1_neo_hooke_v/umat_nh_v.for",
+        "legacy_inc": "legacy/soft_tissues/with_visco/1_neo_hooke_v",
         "legacy_nprops": 9,
         "legacy_nstatev": 28,
         "legacy_props": [1000.0, 10.0, 1, 0.5, 0.25, 1.2, 7.0, 12.0, 2.0],
@@ -71,8 +71,8 @@ PAIRS = {
     },
     # --- Ogden (legacy has KBULK as LAST prop, Ogden params first) ---
     "ogden": {
-        "legacy_umat": "soft_tissues/3_ogden/umat_og.for",
-        "legacy_inc": "soft_tissues/3_ogden",
+        "legacy_umat": "legacy/soft_tissues/3_ogden/umat_og.for",
+        "legacy_inc": "legacy/soft_tissues/3_ogden",
         "legacy_nprops": 7,
         "legacy_nstatev": 1,
         "legacy_props": [1.3, 5.0, 0.5, -2.0, 0.012, 2.0, 1000.0],
@@ -83,8 +83,8 @@ PAIRS = {
     },
     # --- Mooney-Rivlin visco ---
     "mooney_rivlin_visco": {
-        "legacy_umat": "soft_tissues/with_visco/2_mooney_rivlin_v/umat_mr_v.for",
-        "legacy_inc": "soft_tissues/with_visco/2_mooney_rivlin_v",
+        "legacy_umat": "legacy/soft_tissues/with_visco/2_mooney_rivlin_v/umat_mr_v.for",
+        "legacy_inc": "legacy/soft_tissues/with_visco/2_mooney_rivlin_v",
         "legacy_nprops": 10,
         "legacy_nstatev": 28,
         "legacy_props": [1000.0, 6.3, 0.012, 1, 0.5, 0.25, 1.2, 7.0, 12.0, 2.0],
@@ -95,8 +95,8 @@ PAIRS = {
     },
     # --- Ogden visco (legacy: [mu1,a1,mu2,a2,mu3,a3,KBULK,V,tau1,theta1,...]) ---
     "ogden_visco": {
-        "legacy_umat": "soft_tissues/with_visco/3_ogden_v/umat_og_v.for",
-        "legacy_inc": "soft_tissues/with_visco/3_ogden_v",
+        "legacy_umat": "legacy/soft_tissues/with_visco/3_ogden_v/umat_og_v.for",
+        "legacy_inc": "legacy/soft_tissues/with_visco/3_ogden_v",
         "legacy_nprops": 14,
         "legacy_nstatev": 28,
         "legacy_props": [1.3, 5.0, 0.5, -2.0, 0.012, 2.0, 1000.0, 1, 0.5, 0.25, 1.2, 7.0, 12.0, 2.0],

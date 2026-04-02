@@ -21,8 +21,8 @@ Any combination of these can be activated in a single analysis by setting the ap
 ### Legacy material laws
 
 The original single-file material laws are preserved in:
-- `soft_tissues/` — hyperelastic and viscoelastic soft tissue models
-- `biofilaments/` — filament network models (affine, non-affine, mixed, contractile)
+- `legacy/soft_tissues/` — hyperelastic and viscoelastic soft tissue models
+- `legacy/biofilaments/` — filament network models (affine, non-affine, mixed, contractile)
 
 These remain functional but are superseded by the modular `src/` implementation.
 
@@ -65,8 +65,9 @@ src/                        Modular UMAT source modules
   aba_param.inc               ABAQUS implicit typing include
   PROPS_REFERENCE.md          Full PROPS layout documentation with examples
 
-soft_tissues/               Legacy single-file soft tissue UMATs
-biofilaments/               Legacy single-file filament network UMATs
+legacy/
+  soft_tissues/             Legacy single-file soft tissue UMATs
+  biofilaments/             Legacy single-file filament network UMATs
 ```
 
 ## Generating a material law
