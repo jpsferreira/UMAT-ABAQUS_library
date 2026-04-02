@@ -1,26 +1,61 @@
-# Get all directories with a number at the beginning. ignore .git
-DIRS := $(shell find . -type d -name "[0-9]*" ! -path "./.git/*")
+# UMAT-ABAQUS Library Makefile
+#
+# Primary workflow: generate material directories with generate.py
+# This Makefile provides convenience targets for testing.
 
-# Rules to build and test
-.PHONY: all build test test_in_abaqus clean $(DIRS)
+PYTHON = uv run python
+EXAMPLES = neo_hooke mooney_rivlin ogden_3term humphrey_hgo humphrey_fiber \
+           neo_hooke_damage humphrey_hgo_damage humphrey_fiber_damage \
+           neo_hooke_visco mooney_rivlin_visco ogden_visco \
+           humphrey_hgo_visco humphrey_fiber_visco \
+           affine_network nonaffine_network
 
-all: build test test_in_abaqus
+.PHONY: all examples test validate clean
 
-build: $(addsuffix _build,$(DIRS))
-test: $(addsuffix _test,$(DIRS))
-test_in_abaqus: $(addsuffix _test_in_abaqus,$(DIRS))
+all: test
 
-%_build: 
+# Generate all built-in examples
+examples:
+	@for ex in $(EXAMPLES); do \
+		echo "=== Generating $$ex ===" ; \
+		$(PYTHON) generate.py --example $$ex ; \
+	done
+
+# Generate and run standalone tests for all examples
+test: examples
+	@pass=0; fail=0; \
+	for ex in $(EXAMPLES); do \
+		echo "=== Testing $$ex ===" ; \
+		if (cd $$ex && bash -o pipefail -c 'make run 2>&1 | tail -1'); then \
+			pass=$$((pass+1)); \
+		else \
+			echo "FAIL: $$ex"; fail=$$((fail+1)); \
+		fi; \
+	done; \
+	echo ""; echo "$$pass passed, $$fail failed"
+
+# Run validation against legacy code
+validate:
+	$(PYTHON) validate.py
+
+# Clean generated directories
+clean:
+	@for ex in $(EXAMPLES); do rm -rf $$ex; done
+	rm -rf validation_tmp
+
+# --- Legacy targets (soft_tissues/ and biofilaments/) ---
+LEGACY_DIRS := $(shell find . -type d -name "[0-9]*" ! -path "./.git/*" 2>/dev/null)
+
+legacy_build: $(addsuffix _build,$(LEGACY_DIRS))
+legacy_test: $(addsuffix _test,$(LEGACY_DIRS))
+
+%_build:
 	cd $(@:_build=) && sh build*.sh
 
-%_test: 
+%_test:
 	cd $(@:_test=) && ./*.o
 
-%_test_in_abaqus: 
-	cd $(@:_test_in_abaqus=)/test_in_abaqus ; INP_FILE=`ls cube*.inp | head -n 1` ; FOR_FILE=`ls umat*.f* | head -n 1` ; abaqus job=$${INP_FILE%.*} user=$${FOR_FILE%.*} interactive ask_delete=OFF
-
-clean:
-	for dir in $(DIRS); do \
+legacy_clean:
+	for dir in $(LEGACY_DIRS); do \
 		$(RM) $$dir/*.o ; \
-		find $$dir/test_in_abaqus -type f ! \( -name "*.inc" -o -name "*.inp" -o -name "*.py" -o -name "*.for" \) -delete ; \
 	done

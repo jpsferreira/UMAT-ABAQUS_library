@@ -22,9 +22,12 @@ module mod_constants
   integer, parameter :: ISO_HUMPHREY    = 4
 
   ! Anisotropic models
-  integer, parameter :: ANISO_NONE      = 0
-  integer, parameter :: ANISO_HGO       = 1
-  integer, parameter :: ANISO_HUMPHREY  = 2
+  integer, parameter :: ANISO_NONE          = 0
+  integer, parameter :: ANISO_HGO           = 1
+  integer, parameter :: ANISO_HUMPHREY      = 2
+  integer, parameter :: ANISO_HGO_AI        = 3
+  integer, parameter :: ANISO_HUMPHREY_AI   = 4
+  integer, parameter :: ANISO_HUMPHREY_ACT  = 5
 
   ! Network models
   integer, parameter :: NET_NONE           = 0

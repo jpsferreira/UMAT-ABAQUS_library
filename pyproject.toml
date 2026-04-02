@@ -1,6 +1,6 @@
 [build-system]
 requires = ["setuptools>=64"]
-build-backend = "setuptools.backends._legacy:_Backend"
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "umat-abaqus-library"
@@ -8,6 +8,10 @@ version = "0.1.0"
 description = "Generator for self-contained ABAQUS UMAT material law directories"
 requires-python = ">=3.8"
 license = "MIT"
+dependencies = ["numpy"]
+
+[tool.setuptools]
+py-modules = ["generate"]
 
 [project.scripts]
 umat-generate = "generate:main"

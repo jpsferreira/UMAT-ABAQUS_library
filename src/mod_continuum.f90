@@ -45,14 +45,14 @@ contains
     ppv  = pv + det * aux
   end subroutine vol_energy
 
-  !> Volumetric 2nd Piola-Kirchhoff stress: S_vol = p * J * C^{-1}
-  subroutine pk2_vol(pkvol, pv, c)
+  !> Volumetric 2nd Piola-Kirchhoff stress: S_vol = J * p * C^{-1}
+  subroutine pk2_vol(pkvol, pv, c, det)
     real(dp), intent(out) :: pkvol(3,3)
-    real(dp), intent(in)  :: pv, c(3,3)
+    real(dp), intent(in)  :: pv, c(3,3), det
     real(dp) :: cinv(3,3)
 
     call matinv3d(c, cinv)
-    pkvol = pv * cinv
+    pkvol = det * pv * cinv
   end subroutine pk2_vol
 
   !> Volumetric Cauchy stress: sigma_vol = p * I

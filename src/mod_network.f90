@@ -23,6 +23,8 @@ module mod_network
   ! Network assembly — angular integration (AI, icosahedron)
   public :: affine_network_ai
   public :: nonaffine_network_ai
+  public :: mixed_network_ai
+  public :: contractile_network_ai, contractile_force, sliding_law, chemical_state
 
   ! Helper routines
   public :: deformed_filament
@@ -298,12 +300,12 @@ contains
     real(dp), intent(in)  :: f(3,3), det
     integer,  intent(in)  :: nwp
     real(dp), intent(in)  :: mf0(:,:), rw(:)
-    real(dp), intent(in)  :: filprops(6), net_density, b_orient, efi
+    real(dp), intent(in)  :: filprops(8), net_density, b_orient, efi
     real(dp), intent(in)  :: prefdir(3)
 
     real(dp) :: pi, coeff
-    real(dp) :: ll, r0, mu0, beta, b0, lambda0
-    real(dp) :: mfi(3), m0i(3), lambdai, fi, ffi, dwi, ddwi, rho, angle
+    real(dp) :: ll, r0, mu0, beta, b0, lambda0, r0c, etac, r0_eff, chi
+    real(dp) :: mfi(3), m0i(3), lambdai, lambdaf, fi, ffi, dwi, ddwi, rho, angle
     real(dp) :: sfili(3,3), cfili(3,3,3,3)
     real(dp) :: pd(3), pd_norm
     integer  :: ip, j, k, l, m
@@ -314,6 +316,15 @@ contains
     beta    = filprops(4)
     b0      = filprops(5)
     lambda0 = filprops(6)
+    r0c     = filprops(7)
+    etac    = filprops(8)
+
+    ! Effective end-to-end distance (filament + linker)
+    if (etac > ZERO .and. etac < ONE) then
+      r0_eff = r0 + r0c
+    else
+      r0_eff = r0
+    end if
 
     pi    = FOUR * atan(ONE)
     coeff = net_density / det * FOUR * pi
@@ -330,10 +341,25 @@ contains
       m0i = mf0(ip, :)
 
       call deformed_filament(lambdai, mfi, m0i, f)
+
+      ! Linker stretch decomposition
+      if (etac > ZERO .and. etac < ONE) then
+        lambdaf = etac * (r0_eff / r0) * (lambdai - ONE) + ONE
+      else
+        lambdaf = lambdai
+      end if
+
       call compute_bangle(angle, mfi, pd)
       call orientation_density(rho, angle, b_orient, efi)
 
-      call filament_force(fi, ffi, dwi, ddwi, lambdai, lambda0, ll, r0, mu0, beta, b0)
+      call filament_force(fi, ffi, dwi, ddwi, lambdaf, lambda0, ll, r0_eff, mu0, beta, b0)
+
+      ! Chain rule: dW/d(lambdai) = dW/d(lambdaf) * d(lambdaf)/d(lambdai)
+      if (etac > ZERO .and. etac < ONE) then
+        chi = etac * (r0_eff / r0)
+        dwi  = dwi  * chi
+        ddwi = ddwi * chi * chi
+      end if
 
       call filament_stress_fic(sfili, rho, lambdai, dwi, mfi, rw(ip))
       call filament_stiffness_fic(cfili, rho, lambdai, dwi, ddwi, mfi, rw(ip))
@@ -367,11 +393,11 @@ contains
     real(dp), intent(in)  :: f(3,3), det
     integer,  intent(in)  :: nwp
     real(dp), intent(in)  :: mf0(:,:), rw(:)
-    real(dp), intent(in)  :: filprops(6), net_density, b_orient, efi, pp
+    real(dp), intent(in)  :: filprops(8), net_density, b_orient, efi, pp
 
     real(dp) :: pi, coeff
-    real(dp) :: ll, r0, mu0, beta, b0, lambda0
-    real(dp) :: m0i(3), mfi(3), lambdai
+    real(dp) :: ll, r0, mu0, beta, b0, lambda0, r0c, etac, r0_eff
+    real(dp) :: m0i(3), mfi(3), lambdai, lambdaf
     real(dp) :: lambda_eff, sum_lp, fi, ffi, dw, ddw
     real(dp) :: h2(3,3), h4(3,3,3,3), rho, angle
     real(dp) :: scale_s, scale_c1, scale_c2
@@ -383,6 +409,14 @@ contains
     beta    = filprops(4)
     b0      = filprops(5)
     lambda0 = filprops(6)
+    r0c     = filprops(7)
+    etac    = filprops(8)
+
+    if (etac > ZERO .and. etac < ONE) then
+      r0_eff = r0 + r0c
+    else
+      r0_eff = r0
+    end if
 
     pi    = FOUR * atan(ONE)
     coeff = net_density / det
@@ -395,6 +429,14 @@ contains
     do ip = 1, nwp
       m0i = mf0(ip, :)
       call deformed_filament(lambdai, mfi, m0i, f)
+
+      ! Linker stretch decomposition
+      if (etac > ZERO .and. etac < ONE) then
+        lambdaf = etac * (r0_eff / r0) * (lambdai - ONE) + ONE
+      else
+        lambdaf = lambdai
+      end if
+      lambdai = lambdaf  ! Use filament stretch for averaging
 
       angle = ZERO
       call orientation_density(rho, angle, b_orient, efi)
@@ -431,7 +473,7 @@ contains
     end if
 
     ! Evaluate single filament at effective stretch
-    call filament_force(fi, ffi, dw, ddw, lambda_eff, lambda0, ll, r0, mu0, beta, b0)
+    call filament_force(fi, ffi, dw, ddw, lambda_eff, lambda0, ll, r0_eff, mu0, beta, b0)
 
     ! Assemble stress and stiffness
     scale_s  = coeff * dw * lambda_eff**(ONE - pp)
@@ -506,7 +548,7 @@ contains
                                ICOS_FACE_ORDER_MAX
     real(dp), intent(out) :: sfic(3,3), cfic(3,3,3,3)
     real(dp), intent(in)  :: f(3,3), det
-    real(dp), intent(in)  :: filprops(6), net_density, b_orient, efi
+    real(dp), intent(in)  :: filprops(8), net_density, b_orient, efi
     integer,  intent(in)  :: factor
     real(dp), intent(in)  :: prefdir(3)
 
@@ -515,12 +557,12 @@ contains
     integer  :: face_order(ICOS_FACE_NUM)
     integer  :: face_point(ICOS_FACE_ORDER_MAX, ICOS_FACE_NUM)
 
-    real(dp) :: ll, r0, mu0, beta, b0, lambda0
+    real(dp) :: ll, r0, mu0, beta, b0, lambda0, r0c, etac, r0_eff
     real(dp) :: coeff, pi_val
     real(dp) :: a_xyz(3), b_xyz(3), c_xyz(3)
     real(dp) :: a2_xyz(3), b2_xyz(3), c2_xyz(3)
     real(dp) :: node_xyz(3), ai
-    real(dp) :: mfi(3), m0i(3), lambdai
+    real(dp) :: mfi(3), m0i(3), lambdai, lambdaf
     real(dp) :: fi, ffi, dwi, ddwi, rho, angle
     real(dp) :: sfili(3,3), cfili(3,3,3,3)
     real(dp) :: pd(3), pd_norm
@@ -533,6 +575,14 @@ contains
     beta    = filprops(4)
     b0      = filprops(5)
     lambda0 = filprops(6)
+    r0c     = filprops(7)
+    etac    = filprops(8)
+
+    if (etac > ZERO .and. etac < ONE) then
+      r0_eff = r0 + r0c
+    else
+      r0_eff = r0
+    end if
 
     pi_val = FOUR * atan(ONE)
     coeff  = net_density / det
@@ -573,12 +623,20 @@ contains
 
           m0i = node_xyz
           call deformed_filament(lambdai, mfi, m0i, f)
+
+          ! Linker stretch decomposition
+          if (etac > ZERO .and. etac < ONE) then
+            lambdaf = etac * (r0_eff / r0) * (lambdai - ONE) + ONE
+          else
+            lambdaf = lambdai
+          end if
+
           call compute_bangle(angle, mfi, pd)
           call orientation_density(rho, angle, b_orient, efi)
-          call filament_force(fi, ffi, dwi, ddwi, lambdai, lambda0, ll, r0, mu0, beta, b0)
+          call filament_force(fi, ffi, dwi, ddwi, lambdaf, lambda0, ll, r0_eff, mu0, beta, b0)
 
-          call filament_stress_fic(sfili, rho, lambdai, dwi, mfi, ai)
-          call filament_stiffness_fic(cfili, rho, lambdai, dwi, ddwi, mfi, ai)
+          call filament_stress_fic(sfili, rho, lambdaf, dwi, mfi, ai)
+          call filament_stiffness_fic(cfili, rho, lambdaf, dwi, ddwi, mfi, ai)
 
           do j = 1, 3
             do k = 1, 3
@@ -608,12 +666,20 @@ contains
 
           m0i = node_xyz
           call deformed_filament(lambdai, mfi, m0i, f)
+
+          ! Linker stretch decomposition
+          if (etac > ZERO .and. etac < ONE) then
+            lambdaf = etac * (r0_eff / r0) * (lambdai - ONE) + ONE
+          else
+            lambdaf = lambdai
+          end if
+
           call compute_bangle(angle, mfi, pd)
           call orientation_density(rho, angle, b_orient, efi)
-          call filament_force(fi, ffi, dwi, ddwi, lambdai, lambda0, ll, r0, mu0, beta, b0)
+          call filament_force(fi, ffi, dwi, ddwi, lambdaf, lambda0, ll, r0_eff, mu0, beta, b0)
 
-          call filament_stress_fic(sfili, rho, lambdai, dwi, mfi, ai)
-          call filament_stiffness_fic(cfili, rho, lambdai, dwi, ddwi, mfi, ai)
+          call filament_stress_fic(sfili, rho, lambdaf, dwi, mfi, ai)
+          call filament_stiffness_fic(cfili, rho, lambdaf, dwi, ddwi, mfi, ai)
 
           do j = 1, 3
             do k = 1, 3
@@ -651,7 +717,7 @@ contains
                                ICOS_FACE_ORDER_MAX
     real(dp), intent(out) :: sfic(3,3), cfic(3,3,3,3)
     real(dp), intent(in)  :: f(3,3), det
-    real(dp), intent(in)  :: filprops(6), net_density, pp
+    real(dp), intent(in)  :: filprops(8), net_density, pp
     integer,  intent(in)  :: factor
 
     real(dp) :: point_coord(3, ICOS_POINT_NUM)
@@ -659,12 +725,12 @@ contains
     integer  :: face_order(ICOS_FACE_NUM)
     integer  :: face_point(ICOS_FACE_ORDER_MAX, ICOS_FACE_NUM)
 
-    real(dp) :: ll, r0, mu0, beta, b0, lambda0
+    real(dp) :: ll, r0, mu0, beta, b0, lambda0, r0c, etac, r0_eff
     real(dp) :: coeff
     real(dp) :: a_xyz(3), b_xyz(3), c_xyz(3)
     real(dp) :: a2_xyz(3), b2_xyz(3), c2_xyz(3)
     real(dp) :: node_xyz(3), ai
-    real(dp) :: mfi(3), m0i(3), lambdai
+    real(dp) :: mfi(3), m0i(3), lambdai, lambdaf
     real(dp) :: h2(3,3), h4(3,3,3,3), hi(3,3), hhi(3,3,3,3)
     real(dp) :: lambda_sum, area_total, lambda_eff
     real(dp) :: fi, ffi, dw, ddw
@@ -679,6 +745,14 @@ contains
     beta    = filprops(4)
     b0      = filprops(5)
     lambda0 = filprops(6)
+    r0c     = filprops(7)
+    etac    = filprops(8)
+
+    if (etac > ZERO .and. etac < ONE) then
+      r0_eff = r0 + r0c
+    else
+      r0_eff = r0
+    end if
 
     h2 = ZERO
     h4 = ZERO
@@ -711,6 +785,9 @@ contains
 
           m0i = node_xyz
           call deformed_filament(lambdai, mfi, m0i, f)
+          if (etac > ZERO .and. etac < ONE) then
+            lambdai = etac * (r0_eff / r0) * (lambdai - ONE) + ONE
+          end if
           lambda_sum = lambda_sum + (lambdai**pp) * ai
           area_total = area_total + ai
 
@@ -745,6 +822,9 @@ contains
 
           m0i = node_xyz
           call deformed_filament(lambdai, mfi, m0i, f)
+          if (etac > ZERO .and. etac < ONE) then
+            lambdai = etac * (r0_eff / r0) * (lambdai - ONE) + ONE
+          end if
           lambda_sum = lambda_sum + (lambdai**pp) * ai
           area_total = area_total + ai
 
@@ -771,7 +851,7 @@ contains
     lambda_eff = lambda_sum**(ONE / pp)
 
     ! Evaluate single filament at effective stretch
-    call filament_force(fi, ffi, dw, ddw, lambda_eff, lambda0, ll, r0, mu0, beta, b0)
+    call filament_force(fi, ffi, dw, ddw, lambda_eff, lambda0, ll, r0_eff, mu0, beta, b0)
 
     ! Assemble stress and stiffness
     coeff    = net_density / det / area_total
@@ -792,5 +872,302 @@ contains
     end do
 
   end subroutine nonaffine_network_ai
+
+  ! ============================================================================
+  ! MIXED NETWORK ASSEMBLY (AFFINE + NON-AFFINE)
+  ! ============================================================================
+
+  !> Assemble mixed network: superposition of affine and non-affine contributions.
+  !> Uses icosahedron-based angular integration (AI) for both sub-networks.
+  subroutine mixed_network_ai(sfic, cfic, f, det, &
+                              filprops, density_naff, pp, density_aff, &
+                              b_orient, efi, factor, prefdir)
+    real(dp), intent(out) :: sfic(3,3), cfic(3,3,3,3)
+    real(dp), intent(in)  :: f(3,3), det
+    real(dp), intent(in)  :: filprops(8)
+    real(dp), intent(in)  :: density_naff, pp, density_aff
+    real(dp), intent(in)  :: b_orient, efi
+    integer,  intent(in)  :: factor
+    real(dp), intent(in)  :: prefdir(3)
+
+    real(dp) :: sfic_aff(3,3), cfic_aff(3,3,3,3)
+    real(dp) :: sfic_naff(3,3), cfic_naff(3,3,3,3)
+    integer  :: i, j, k, l
+
+    sfic = ZERO
+    cfic = ZERO
+
+    ! Affine contribution
+    if (density_aff > ZERO) then
+      call affine_network_ai(sfic_aff, cfic_aff, f, det, &
+                             filprops, density_aff, b_orient, efi, factor, prefdir)
+      sfic = sfic + sfic_aff
+      do i = 1, 3; do j = 1, 3; do k = 1, 3; do l = 1, 3
+        cfic(i,j,k,l) = cfic(i,j,k,l) + cfic_aff(i,j,k,l)
+      end do; end do; end do; end do
+    end if
+
+    ! Non-affine contribution
+    if (density_naff > ZERO) then
+      call nonaffine_network_ai(sfic_naff, cfic_naff, f, det, &
+                                filprops, density_naff, pp, factor)
+      sfic = sfic + sfic_naff
+      do i = 1, 3; do j = 1, 3; do k = 1, 3; do l = 1, 3
+        cfic(i,j,k,l) = cfic(i,j,k,l) + cfic_naff(i,j,k,l)
+      end do; end do; end do; end do
+    end if
+  end subroutine mixed_network_ai
+
+  ! ============================================================================
+  ! CONTRACTILE NETWORK
+  ! ============================================================================
+
+  !> Chemical kinetics: 4-state model with 7 rate constants.
+  !> Evolves chemical state fractions via forward Euler.
+  subroutine chemical_state(frac, frac0, kch, dtime)
+    real(dp), intent(out) :: frac(4)
+    real(dp), intent(in)  :: frac0(4), kch(7), dtime
+    real(dp) :: stiff(4,4), aux
+    integer :: i, j
+
+    stiff = ZERO
+    stiff(1,1) = -kch(1);  stiff(1,2) = kch(2);   stiff(1,4) = kch(7)
+    stiff(2,1) = kch(1);   stiff(2,2) = -kch(2)-kch(3); stiff(2,3) = kch(4)
+    stiff(3,2) = kch(3);   stiff(3,3) = -kch(4)-kch(5); stiff(3,4) = kch(6)
+    stiff(4,3) = kch(5);   stiff(4,4) = -kch(6)-kch(7)
+
+    do i = 1, 4
+      aux = ZERO
+      do j = 1, 4
+        aux = aux + stiff(i,j) * frac0(j)
+      end do
+      frac(i) = aux * dtime + frac0(i)
+    end do
+  end subroutine chemical_state
+
+  !> Sliding dynamics: clips force to [frac(3)*ffmax, (frac(3)+frac(4))*ffmax]
+  !> then updates sliding displacement via viscous law.
+  subroutine sliding_law(ffc_out, ru, ffc0, ru0, ffmax, fric, frac, dtime)
+    real(dp), intent(out) :: ffc_out, ru
+    real(dp), intent(in)  :: ffc0, ru0, ffmax, fric, frac(4), dtime
+    real(dp) :: lo, hi
+
+    lo = frac(3) * ffmax
+    hi = (frac(3) + frac(4)) * ffmax
+
+    if (ffc0 < lo) then
+      ffc_out = lo
+    else if (ffc0 > hi) then
+      ffc_out = hi
+    else
+      ffc_out = ffc0
+    end if
+
+    ru = ru0 + dtime / fric * (ffc_out - ffc0)
+  end subroutine sliding_law
+
+  !> Contractile filament: adds active contraction to passive stretch,
+  !> computes force, then applies sliding dynamics.
+  subroutine contractile_force(fi, ffi, dw, ddw, ru, ru0_in, &
+                               lambda_passive, lambda0, ll, r0, mu0, beta, b0, &
+                               ffmax, fric, frac, dtime)
+    real(dp), intent(out) :: fi, ffi, dw, ddw, ru
+    real(dp), intent(in)  :: ru0_in, lambda_passive, lambda0, ll, r0, mu0, beta, b0
+    real(dp), intent(in)  :: ffmax, fric, frac(4), dtime
+    real(dp) :: lambda_c, ffc_out
+
+    ! Add contraction to passive stretch
+    if (ru0_in > ZERO) then
+      lambda_c = lambda_passive + ru0_in
+    else
+      lambda_c = lambda_passive
+    end if
+
+    ! Force at contracted length
+    call filament_force(fi, ffi, dw, ddw, lambda_c, lambda0, ll, r0, mu0, beta, b0)
+
+    ! Sliding dynamics updates ru
+    call sliding_law(ffc_out, ru, ffi, ru0_in, ffmax, fric, frac, dtime)
+  end subroutine contractile_force
+
+  !> Assemble contractile network using icosahedron-based angular integration.
+  !> Extends affine network with active contraction per integration direction.
+  !> State variables: ru0(nwp) sliding displacements, frac(4) chemical state.
+  subroutine contractile_network_ai(sfic, cfic, f, det, &
+                                     filprops, net_density, b_orient, efi, &
+                                     fric_val, ffmax_val, factor, prefdir, &
+                                     kch, dtime, ru0, frac, nwp_out)
+    use mod_icosahedron, only: icos_shape, sphere01_triangle_project, &
+                               sphere01_triangle_vertices_to_area, &
+                               ICOS_POINT_NUM, ICOS_EDGE_NUM, ICOS_FACE_NUM, &
+                               ICOS_FACE_ORDER_MAX
+    real(dp), intent(out)   :: sfic(3,3), cfic(3,3,3,3)
+    real(dp), intent(in)    :: f(3,3), det
+    real(dp), intent(in)    :: filprops(8), net_density, b_orient, efi
+    real(dp), intent(in)    :: fric_val, ffmax_val
+    integer,  intent(in)    :: factor
+    real(dp), intent(in)    :: prefdir(3)
+    real(dp), intent(in)    :: kch(7), dtime
+    real(dp), intent(inout) :: ru0(*)  ! sliding displacement per direction
+    real(dp), intent(inout) :: frac(4) ! chemical state
+    integer,  intent(out)   :: nwp_out ! number of integration points used
+
+    real(dp) :: point_coord(3, ICOS_POINT_NUM)
+    integer  :: edge_point(2, ICOS_EDGE_NUM)
+    integer  :: face_order(ICOS_FACE_NUM)
+    integer  :: face_point(ICOS_FACE_ORDER_MAX, ICOS_FACE_NUM)
+
+    real(dp) :: ll, r0, mu0, beta, b0, lambda0, r0c, etac, r0_eff
+    real(dp) :: coeff
+    real(dp) :: a_xyz(3), b_xyz(3), c_xyz(3)
+    real(dp) :: a2_xyz(3), b2_xyz(3), c2_xyz(3)
+    real(dp) :: node_xyz(3), ai
+    real(dp) :: mfi(3), m0i(3), lambdai, lambdaf
+    real(dp) :: fi, ffi, dwi, ddwi, rho, angle, ru_new
+    real(dp) :: sfili(3,3), cfili(3,3,3,3)
+    real(dp) :: pd(3), pd_norm, aux_dot
+    integer  :: face, ia, ib, ic, f1, f2, f3
+    integer  :: j, k, l, m, node_num
+
+    ll      = filprops(1)
+    r0      = filprops(2)
+    mu0     = filprops(3)
+    beta    = filprops(4)
+    b0      = filprops(5)
+    lambda0 = filprops(6)
+    r0c     = filprops(7)
+    etac    = filprops(8)
+
+    if (etac > ZERO .and. etac < ONE) then
+      r0_eff = r0 + r0c
+    else
+      r0_eff = r0
+    end if
+
+    coeff = net_density / det
+
+    ! Compute deformed preferred direction
+    pd = matmul(f, prefdir)
+    pd_norm = sqrt(dot_product(pd, pd))
+    if (pd_norm > ZERO) pd = pd / pd_norm
+
+    sfic = ZERO
+    cfic = ZERO
+    node_num = 0
+
+    ! Set up icosahedron
+    call icos_shape(point_coord, edge_point, face_order, face_point)
+
+    ! Loop over icosahedron faces
+    do face = 1, ICOS_FACE_NUM
+      ia = face_point(1, face)
+      ib = face_point(2, face)
+      ic = face_point(3, face)
+
+      a_xyz = point_coord(:, ia)
+      b_xyz = point_coord(:, ib)
+      c_xyz = point_coord(:, ic)
+
+      ! Same-orientation subtriangles
+      do f3 = 1, 3*factor - 2, 3
+        do f2 = 1, 3*factor - f3 - 1, 3
+          node_num = node_num + 1
+          f1 = 3*factor - f3 - f2
+
+          call sphere01_triangle_project(a_xyz, b_xyz, c_xyz, f1, f2, f3, node_xyz)
+          call sphere01_triangle_project(a_xyz, b_xyz, c_xyz, f1+2, f2-1, f3-1, a2_xyz)
+          call sphere01_triangle_project(a_xyz, b_xyz, c_xyz, f1-1, f2+2, f3-1, b2_xyz)
+          call sphere01_triangle_project(a_xyz, b_xyz, c_xyz, f1-1, f2-1, f3+2, c2_xyz)
+          call sphere01_triangle_vertices_to_area(a2_xyz, b2_xyz, c2_xyz, ai)
+
+          m0i = node_xyz
+          call deformed_filament(lambdai, mfi, m0i, f)
+
+          ! Linker stretch decomposition
+          if (etac > ZERO .and. etac < ONE) then
+            lambdaf = etac * (r0_eff / r0) * (lambdai - ONE) + ONE
+          else
+            lambdaf = lambdai
+          end if
+
+          ! Contractile force with sliding
+          call contractile_force(fi, ffi, dwi, ddwi, ru_new, ru0(node_num), &
+                                 lambdaf, lambda0, ll, r0_eff, mu0, beta, b0, &
+                                 ffmax_val, fric_val, frac, dtime)
+          ru0(node_num) = ru_new
+
+          ! Orientation density
+          call compute_bangle(angle, mfi, pd)
+          call orientation_density(rho, angle, b_orient, efi)
+
+          ! Only accumulate if contraction is active
+          if (ru_new > ZERO) then
+            call filament_stress_fic(sfili, rho, lambdaf, dwi, mfi, ai)
+            call filament_stiffness_fic(cfili, rho, lambdaf, dwi, ddwi, mfi, ai)
+
+            do j = 1, 3
+              do k = 1, 3
+                sfic(j,k) = sfic(j,k) + coeff * sfili(j,k)
+                do l = 1, 3
+                  do m = 1, 3
+                    cfic(j,k,l,m) = cfic(j,k,l,m) + coeff * cfili(j,k,l,m)
+                  end do
+                end do
+              end do
+            end do
+          end if
+        end do
+      end do
+
+      ! Opposite-orientation subtriangles
+      do f3 = 2, 3*factor - 4, 3
+        do f2 = 2, 3*factor - f3 - 2, 3
+          node_num = node_num + 1
+          f1 = 3*factor - f3 - f2
+
+          call sphere01_triangle_project(a_xyz, b_xyz, c_xyz, f1, f2, f3, node_xyz)
+          call sphere01_triangle_project(a_xyz, b_xyz, c_xyz, f1-2, f2+1, f3+1, a2_xyz)
+          call sphere01_triangle_project(a_xyz, b_xyz, c_xyz, f1+1, f2-2, f3+1, b2_xyz)
+          call sphere01_triangle_project(a_xyz, b_xyz, c_xyz, f1+1, f2+1, f3-2, c2_xyz)
+          call sphere01_triangle_vertices_to_area(a2_xyz, b2_xyz, c2_xyz, ai)
+
+          m0i = node_xyz
+          call deformed_filament(lambdai, mfi, m0i, f)
+
+          if (etac > ZERO .and. etac < ONE) then
+            lambdaf = etac * (r0_eff / r0) * (lambdai - ONE) + ONE
+          else
+            lambdaf = lambdai
+          end if
+
+          call contractile_force(fi, ffi, dwi, ddwi, ru_new, ru0(node_num), &
+                                 lambdaf, lambda0, ll, r0_eff, mu0, beta, b0, &
+                                 ffmax_val, fric_val, frac, dtime)
+          ru0(node_num) = ru_new
+
+          call compute_bangle(angle, mfi, pd)
+          call orientation_density(rho, angle, b_orient, efi)
+
+          if (ru_new > ZERO) then
+            call filament_stress_fic(sfili, rho, lambdaf, dwi, mfi, ai)
+            call filament_stiffness_fic(cfili, rho, lambdaf, dwi, ddwi, mfi, ai)
+
+            do j = 1, 3
+              do k = 1, 3
+                sfic(j,k) = sfic(j,k) + coeff * sfili(j,k)
+                do l = 1, 3
+                  do m = 1, 3
+                    cfic(j,k,l,m) = cfic(j,k,l,m) + coeff * cfili(j,k,l,m)
+                  end do
+                end do
+              end do
+            end do
+          end if
+        end do
+      end do
+    end do
+
+    nwp_out = node_num
+  end subroutine contractile_network_ai
 
 end module mod_network
