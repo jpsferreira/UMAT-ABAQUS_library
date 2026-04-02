@@ -20,3 +20,12 @@ materials/filamentous_network/biofilament_affine_model/vonmises_distribution_sim
 *.prt
 *.DS_Store
 *.mod
+# Generated material directories (from generate.py)
+/neo_hooke/
+/mooney_rivlin/
+/humphrey_hgo/
+/ogden_3term/
+/neo_hooke_damage/
+/neo_hooke_visco/
+/affine_network/
+src/build/
