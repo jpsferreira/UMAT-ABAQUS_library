@@ -1,2 +1,0 @@
-./monotonic &&
-open monotonic.eps
