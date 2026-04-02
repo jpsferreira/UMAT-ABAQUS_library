@@ -26,7 +26,7 @@ test: examples
 	@pass=0; fail=0; \
 	for ex in $(EXAMPLES); do \
 		echo "=== Testing $$ex ===" ; \
-		if (cd $$ex && make run 2>&1 | tail -1); then \
+		if (cd $$ex && bash -o pipefail -c 'make run 2>&1 | tail -1'); then \
 			pass=$$((pass+1)); \
 		else \
 			echo "FAIL: $$ex"; fail=$$((fail+1)); \

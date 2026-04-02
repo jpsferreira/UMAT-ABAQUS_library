@@ -304,7 +304,7 @@ contains
     real(dp), intent(in)  :: prefdir(3)
 
     real(dp) :: pi, coeff
-    real(dp) :: ll, r0, mu0, beta, b0, lambda0, r0c, etac, r0_eff
+    real(dp) :: ll, r0, mu0, beta, b0, lambda0, r0c, etac, r0_eff, chi
     real(dp) :: mfi(3), m0i(3), lambdai, lambdaf, fi, ffi, dwi, ddwi, rho, angle
     real(dp) :: sfili(3,3), cfili(3,3,3,3)
     real(dp) :: pd(3), pd_norm
@@ -353,6 +353,13 @@ contains
       call orientation_density(rho, angle, b_orient, efi)
 
       call filament_force(fi, ffi, dwi, ddwi, lambdaf, lambda0, ll, r0_eff, mu0, beta, b0)
+
+      ! Chain rule: dW/d(lambdai) = dW/d(lambdaf) * d(lambdaf)/d(lambdai)
+      if (etac > ZERO .and. etac < ONE) then
+        chi = etac * (r0_eff / r0)
+        dwi  = dwi  * chi
+        ddwi = ddwi * chi * chi
+      end if
 
       call filament_stress_fic(sfili, rho, lambdai, dwi, mfi, rw(ip))
       call filament_stiffness_fic(cfili, rho, lambdai, dwi, ddwi, mfi, rw(ip))

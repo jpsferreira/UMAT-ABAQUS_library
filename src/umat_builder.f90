@@ -41,7 +41,8 @@ subroutine umat(stress, statev, ddsdde, sse, spd, scd, &
                                pk2_anisofic, cmat_anisofic, set_jr, indexx
   use mod_hyperelastic, only: sef_neo_hooke, sef_mooney_rivlin, sef_humphrey, sef_ogden
   use mod_anisotropic,  only: fiber_direction, sef_aniso_hgo, sef_aniso_humphrey, &
-                               sef_aniso_humphrey_act, sef_aniso_hgo_ai
+                               sef_aniso_humphrey_act, sef_aniso_hgo_ai, &
+                               sef_aniso_humphrey_ai
   use mod_damage,       only: damage_sigmoid
   use mod_viscosity,    only: visco_maxwell, MAX_VISCO_BRANCHES
 
@@ -293,6 +294,21 @@ subroutine umat(stress, statev, ddsdde, sse, spd, scd, &
                              distgr, det, k1_fib, k2_fib, bdisp_fib, factor_aniso, vorif)
 
       ! AI aniso returns sfic/cfic directly — add to totals and skip daniso path
+      sfic = sfic + sfic_aniso_ai
+      cfic = cfic + cfic_aniso_ai
+      cycle  ! skip pk2_anisofic below
+
+    case (ANISO_HUMPHREY_AI)
+      k1_fib    = props(ip)
+      k2_fib    = props(ip+1)
+      bdisp_fib = props(ip+2)
+      factor_aniso = nint(props(ip+3))
+      vorif     = props(ip+4:ip+6)
+      ip = ip + 7
+
+      call sef_aniso_humphrey_ai(sfic_aniso_ai, cfic_aniso_ai, w_aniso_ai, &
+                                  distgr, det, k1_fib, k2_fib, bdisp_fib, factor_aniso, vorif)
+
       sfic = sfic + sfic_aniso_ai
       cfic = cfic + cfic_aniso_ai
       cycle  ! skip pk2_anisofic below
@@ -636,10 +652,12 @@ subroutine network_contribution(network_type, props, ip, distgr, det, &
     call chemical_state(frac_new, frac, kch, dtime)
     statev(sdv_off+1 : sdv_off+4) = frac_new
 
-    ! Load RU0 sliding displacements from state variables
-    ! (nwp is determined by contractile_network_ai)
-    ! We pre-load a generous block; actual count is returned in nwp
-    nwp = min(2000, nstatev - sdv_off - 4)
+    ! Derive nwp from icosahedron refinement factor (20 * factor^2)
+    nwp = 20 * factor_ai * factor_ai
+    if (nwp > 2000) nwp = 2000  ! workspace limit
+    if (sdv_off + 4 + nwp > nstatev) then
+      nwp = nstatev - sdv_off - 4
+    end if
     if (nwp > 0) then
       ru0(1:nwp) = statev(sdv_off+5 : sdv_off+4+nwp)
     end if

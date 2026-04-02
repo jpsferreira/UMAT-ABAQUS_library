@@ -402,7 +402,11 @@ def validate_pair(name, cfg):
         r = compare_dat(leg_dat, new_dat, lc)
         results.append(r)
 
-    return all(r for r in results if r is not None)
+    valid = [r for r in results if r is not None]
+    if not valid:
+        print("  SKIP: no load case outputs to compare")
+        return None
+    return all(valid)
 
 
 def main():

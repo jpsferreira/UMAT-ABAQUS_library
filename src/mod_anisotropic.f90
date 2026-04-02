@@ -13,6 +13,7 @@ module mod_anisotropic
   public :: fiber_direction, sef_aniso_hgo, sef_aniso_humphrey
   public :: sef_aniso_humphrey_act
   public :: sef_aniso_hgo_ai
+  public :: sef_aniso_humphrey_ai
   public :: n_params_aniso
 
 contains
@@ -174,7 +175,9 @@ contains
     ! Chain rule: d/dI4 = d/d(lambda_bar) * d(lambda_bar)/dI4
     ! d(lambda_bar)/dI4 = (1/2) * I4^(-1/2)
     daniso(1) = daniso(1) + duact * HALF * cbari4**(-HALF)
-    daniso(2) = daniso(2) + d2uact * (-0.25_dp) * cbari4**(-1.5_dp) &
+    ! Chain rule: d2W/dI4^2 = dW/dlambda * d2lambda/dI4^2
+    !                        + d2W/dlambda^2 * (dlambda/dI4)^2
+    daniso(2) = daniso(2) + duact  * (-0.25_dp) * cbari4**(-1.5_dp) &
                            + d2uact * (HALF * cbari4**(-HALF))**2
   end subroutine sef_aniso_humphrey_act
 
@@ -379,5 +382,159 @@ contains
       end do
     end do
   end subroutine sef_aniso_hgo_ai
+
+  !> Humphrey fiber model with discrete angular integration (icosahedron-based).
+  !> Returns fictitious Cauchy stress and spatial elasticity tensor directly.
+  !> W_fib = K1 * (exp[K2*(lambda-1)^2] - 1), only active for lambda > 1.
+  subroutine sef_aniso_humphrey_ai(sfic_aniso, cfic_aniso, w_aniso, &
+                                    distgr, det, k1, k2, bdisp, factor_ai, vorif)
+    use mod_icosahedron, only: icos_shape, sphere01_triangle_project, &
+                               sphere01_triangle_vertices_to_area, &
+                               ICOS_POINT_NUM, ICOS_EDGE_NUM, ICOS_FACE_NUM, &
+                               ICOS_FACE_ORDER_MAX
+    real(dp), intent(out) :: sfic_aniso(3,3), cfic_aniso(3,3,3,3), w_aniso
+    real(dp), intent(in)  :: distgr(3,3), det, k1, k2, bdisp, vorif(3)
+    integer,  intent(in)  :: factor_ai
+
+    real(dp) :: point_coord(3, ICOS_POINT_NUM)
+    integer  :: edge_point(2, ICOS_EDGE_NUM)
+    integer  :: face_order(ICOS_FACE_NUM)
+    integer  :: face_point(ICOS_FACE_ORDER_MAX, ICOS_FACE_NUM)
+
+    real(dp) :: a_xyz(3), b_xyz(3), c_xyz(3)
+    real(dp) :: a2_xyz(3), b2_xyz(3), c2_xyz(3)
+    real(dp) :: node_xyz(3), ai
+    real(dp) :: mfi(3), m0i(3), lambdai, ei
+    real(dp) :: dwi, ddwi, wi, rho, angle
+    real(dp) :: pd(3), pd_norm, efi_val
+    real(dp) :: pi_val, aux_s, aux_c, aux_rho
+    integer  :: face, ia, ib, ic, f1, f2, f3
+    integer  :: j, k, l, m
+
+    pi_val = FOUR * atan(ONE)
+
+    call erfi_func(efi_val, bdisp, 60)
+
+    pd = matmul(distgr, vorif)
+    pd_norm = sqrt(dot_product(pd, pd))
+    if (pd_norm > ZERO) pd = pd / pd_norm
+
+    sfic_aniso = ZERO
+    cfic_aniso = ZERO
+    w_aniso = ZERO
+
+    aux_s = TWO / det
+    aux_c = FOUR * det**(-FOUR/THREE)
+
+    call icos_shape(point_coord, edge_point, face_order, face_point)
+
+    do face = 1, ICOS_FACE_NUM
+      ia = face_point(1, face)
+      ib = face_point(2, face)
+      ic = face_point(3, face)
+
+      a_xyz = point_coord(:, ia)
+      b_xyz = point_coord(:, ib)
+      c_xyz = point_coord(:, ic)
+
+      ! Same-orientation subtriangles
+      do f3 = 1, 3*factor_ai - 2, 3
+        do f2 = 1, 3*factor_ai - f3 - 1, 3
+          f1 = 3*factor_ai - f3 - f2
+
+          call sphere01_triangle_project(a_xyz, b_xyz, c_xyz, f1, f2, f3, node_xyz)
+          call sphere01_triangle_project(a_xyz, b_xyz, c_xyz, f1+2, f2-1, f3-1, a2_xyz)
+          call sphere01_triangle_project(a_xyz, b_xyz, c_xyz, f1-1, f2+2, f3-1, b2_xyz)
+          call sphere01_triangle_project(a_xyz, b_xyz, c_xyz, f1-1, f2-1, f3+2, c2_xyz)
+          call sphere01_triangle_vertices_to_area(a2_xyz, b2_xyz, c2_xyz, ai)
+
+          m0i = node_xyz
+          mfi = matmul(distgr, m0i)
+          lambdai = sqrt(dot_product(mfi, mfi))
+          if (lambdai > ZERO) mfi = mfi / lambdai
+
+          aux_rho = dot_product(mfi, pd)
+          aux_rho = max(-ONE, min(ONE, aux_rho))
+          angle = acos(aux_rho)
+          call von_mises_density(rho, angle, bdisp, efi_val)
+
+          ai = ai / (TWO * pi_val)
+
+          ! Humphrey fiber: E = lambda - 1, active only in tension
+          ei = lambdai - ONE
+
+          if (ei > ZERO) then
+            wi   = k1 * (exp(k2 * ei * ei) - ONE)
+            dwi  = TWO * k1 * k2 * ei * exp(k2 * ei * ei) / (TWO * lambdai)
+            ddwi = TWO * k1 * k2 * exp(k2 * ei * ei) &
+                   * (ONE + TWO * k2 * ei * ei * lambdai) &
+                   / (FOUR * lambdai**3)
+
+            do j = 1, 3
+              do k = 1, 3
+                sfic_aniso(j,k) = sfic_aniso(j,k) + aux_s * rho * dwi * ai * mfi(j) * mfi(k)
+                do l = 1, 3
+                  do m = 1, 3
+                    cfic_aniso(j,k,l,m) = cfic_aniso(j,k,l,m) &
+                      + aux_c * rho * ddwi * ai * mfi(j) * mfi(k) * mfi(l) * mfi(m)
+                  end do
+                end do
+              end do
+            end do
+
+            w_aniso = w_aniso + rho * ai * wi
+          end if
+        end do
+      end do
+
+      ! Opposite-orientation subtriangles
+      do f3 = 2, 3*factor_ai - 4, 3
+        do f2 = 2, 3*factor_ai - f3 - 2, 3
+          f1 = 3*factor_ai - f3 - f2
+
+          call sphere01_triangle_project(a_xyz, b_xyz, c_xyz, f1, f2, f3, node_xyz)
+          call sphere01_triangle_project(a_xyz, b_xyz, c_xyz, f1-2, f2+1, f3+1, a2_xyz)
+          call sphere01_triangle_project(a_xyz, b_xyz, c_xyz, f1+1, f2-2, f3+1, b2_xyz)
+          call sphere01_triangle_project(a_xyz, b_xyz, c_xyz, f1+1, f2+1, f3-2, c2_xyz)
+          call sphere01_triangle_vertices_to_area(a2_xyz, b2_xyz, c2_xyz, ai)
+
+          m0i = node_xyz
+          mfi = matmul(distgr, m0i)
+          lambdai = sqrt(dot_product(mfi, mfi))
+          if (lambdai > ZERO) mfi = mfi / lambdai
+
+          aux_rho = dot_product(mfi, pd)
+          aux_rho = max(-ONE, min(ONE, aux_rho))
+          angle = acos(aux_rho)
+          call von_mises_density(rho, angle, bdisp, efi_val)
+
+          ai = ai / (TWO * pi_val)
+          ei = lambdai - ONE
+
+          if (ei > ZERO) then
+            wi   = k1 * (exp(k2 * ei * ei) - ONE)
+            dwi  = TWO * k1 * k2 * ei * exp(k2 * ei * ei) / (TWO * lambdai)
+            ddwi = TWO * k1 * k2 * exp(k2 * ei * ei) &
+                   * (ONE + TWO * k2 * ei * ei * lambdai) &
+                   / (FOUR * lambdai**3)
+
+            do j = 1, 3
+              do k = 1, 3
+                sfic_aniso(j,k) = sfic_aniso(j,k) + aux_s * rho * dwi * ai * mfi(j) * mfi(k)
+                do l = 1, 3
+                  do m = 1, 3
+                    cfic_aniso(j,k,l,m) = cfic_aniso(j,k,l,m) &
+                      + aux_c * rho * ddwi * ai * mfi(j) * mfi(k) * mfi(l) * mfi(m)
+                  end do
+                end do
+              end do
+            end do
+
+            w_aniso = w_aniso + rho * ai * wi
+          end if
+        end do
+      end do
+    end do
+  end subroutine sef_aniso_humphrey_ai
 
 end module mod_anisotropic
