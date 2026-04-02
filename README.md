@@ -11,8 +11,8 @@ This library provides a **single UMAT subroutine** that assembles material behav
 | Category | Models |
 |----------|--------|
 | **Isotropic** | Neo-Hookean, Mooney-Rivlin, Ogden (N-term), Humphrey exponential |
-| **Anisotropic** | HGO with dispersion, Humphrey fiber (per fiber family, up to 2 families) |
-| **Network** | Affine, Non-affine (quadrature weights or icosahedron angular integration) |
+| **Anisotropic** | HGO (analytical dispersion or AI discrete), Humphrey fiber, Humphrey fiber with muscle activation |
+| **Network** | Affine, Non-affine, Mixed, Contractile (RW or AI integration), with optional crosslinker coupling |
 | **Damage** | Sigmoid evolution |
 | **Viscosity** | Generalized Maxwell (up to 3 branches) |
 
@@ -47,22 +47,23 @@ See [docs/config_guide.md](docs/config_guide.md) for the full JSON config schema
 
 ```
 generate.py                 Material law generator (main entry point)
+validate.py                 Legacy vs modular comparison test suite
+docs/config_guide.md        Full JSON config schema and parameter reference
 src/                        Modular UMAT source modules
   mod_constants.f90           Precision parameters and model type IDs
   mod_tensor.f90              Tensor algebra (contractions, push/pull, spectral)
   mod_kinematics.f90          Deformation measures (F, C, B, invariants, stretches)
   mod_continuum.f90           Stress/stiffness framework (vol/iso split, Voigt, Jaumann)
   mod_hyperelastic.f90        Isotropic strain energy functions
-  mod_anisotropic.f90         Fiber-reinforced models (HGO, Humphrey fiber)
+  mod_anisotropic.f90         Fiber-reinforced models (HGO, Humphrey, AI discrete, activation)
   mod_icosahedron.f90         Icosahedron geometry for angular integration
-  mod_network.f90             Filament network assembly (RW and AI variants)
+  mod_network.f90             Filament network assembly (affine, non-affine, mixed, contractile)
   mod_damage.f90              Damage evolution
   mod_viscosity.f90           Generalized Maxwell viscoelasticity
   umat_builder.f90            Single UMAT entry point + network dispatch
   uexternaldb.f90             UEXTERNALDB for loading quadrature data (RW networks)
   aba_param.inc               ABAQUS implicit typing include
   PROPS_REFERENCE.md          Full PROPS layout documentation with examples
-  Makefile                    Build rules for module compilation
 
 soft_tissues/               Legacy single-file soft tissue UMATs
 biofilaments/               Legacy single-file filament network UMATs
@@ -78,7 +79,15 @@ The `generate.py` script creates a self-contained directory with everything need
 uv run umat-generate --example neo_hooke
 ```
 
-Run `uv run umat-generate --list` for the full list. Current examples include: `neo_hooke`, `mooney_rivlin`, `humphrey_hgo`, `ogden_3term`, `humphrey_fiber`, `neo_hooke_damage`, `humphrey_hgo_damage`, `humphrey_fiber_damage`, `neo_hooke_visco`, `mooney_rivlin_visco`, `ogden_visco`, `humphrey_hgo_visco`, `humphrey_fiber_visco`, `affine_network`, `nonaffine_network`.
+Run `uv run umat-generate --list` for the full list. Current examples:
+
+| Category | Examples |
+|----------|----------|
+| Isotropic | `neo_hooke`, `mooney_rivlin`, `ogden_3term` |
+| Anisotropic | `humphrey_hgo`, `humphrey_fiber`, `humphrey_hgo_ai`, `humphrey_muscle` |
+| Damage | `neo_hooke_damage`, `humphrey_hgo_damage`, `humphrey_fiber_damage` |
+| Viscosity | `neo_hooke_visco`, `mooney_rivlin_visco`, `ogden_visco`, `humphrey_hgo_visco`, `humphrey_fiber_visco` |
+| Networks | `affine_network`, `nonaffine_network`, `affine_network_linkers`, `mixed_network`, `contractile_network` |
 
 ### From a JSON configuration
 
@@ -160,23 +169,33 @@ See `src/PROPS_REFERENCE.md` for the full parameter reference.
 
 Network models offer two integration approaches:
 
-| NETWORK_TYPE | Scheme | Requires external files? |
-|:---:|--------|:---:|
-| 1, 2 | Pre-loaded quadrature weights (RW) | Yes (`sphere_intXXc.inp`) |
-| 5, 6 | Icosahedron angular integration (AI) | No |
+| NETWORK_TYPE | Model | Scheme | External files? |
+|:---:|--------|--------|:---:|
+| 1 | Affine | Quadrature weights (RW) | Yes (`sphere_intXXc.inp`) |
+| 2 | Non-affine | Quadrature weights (RW) | Yes |
+| 3 | Mixed (affine + non-affine) | Icosahedron (AI) | No |
+| 4 | Contractile (active contraction) | Icosahedron (AI) | No |
+| 5 | Affine | Icosahedron (AI) | No |
+| 6 | Non-affine | Icosahedron (AI) | No |
 
 The RW approach loads quadrature directions from `sphere_intXXc.inp` at analysis start via the `UEXTERNALDB` subroutine. The AI approach generates integration directions dynamically from an icosahedron subdivision, controlled by the `factor` parameter in PROPS.
 
+All network types support optional crosslinker coupling via R0C and ETAC parameters (set ETAC=0 to disable).
+
 ## State variables (DEPVAR)
 
-| Slot | Content |
-|------|---------|
-| 1 | Jacobian determinant J |
-| 2 | Damage variable d (if damage active) |
-| 3 | Max historical strain energy (if damage active) |
-| 4+ | Hidden stress tensors for Maxwell branches (9 per branch) |
+| Slot | Content | Condition |
+|------|---------|-----------|
+| 1 | Jacobian determinant J | Always |
+| 2 | Damage variable d | If damage_type > 0 |
+| 3 | Max strain energy | If damage_type > 0 |
+| next 9 per branch | Hidden stress tensors (3x3) | If n_visco > 0 |
+| next 4 | Chemical fractions (4 species) | If network_type == 4 |
+| next nwp | Sliding displacements per direction | If network_type == 4 |
 
-Formula: `NSTATEV = 1 + (2 if damage) + (9 * N_VISCO)`
+Formula: `NSTATEV = 1 + (2 if damage) + (9 * N_VISCO) + (4 + nwp if contractile)`
+
+Where `nwp = 20 * factor^2` for contractile networks.
 
 ## License
 
