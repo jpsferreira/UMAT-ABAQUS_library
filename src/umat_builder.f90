@@ -9,8 +9,8 @@
 !>  PROPS(2)  = ISO_TYPE       0=none, 1=NH, 2=MR, 3=Ogden, 4=Humphrey
 !>  PROPS(3)  = ANISO_TYPE     0=none, 1=HGO, 2=Humphrey-fiber
 !>  PROPS(4)  = N_FIBER_FAM    Number of fiber families (0, 1, or 2)
-!>  PROPS(5)  = NETWORK_TYPE   0=none, 1=affine, 2=non-affine,
-!>                             5=affine-AI, 6=non-affine-AI
+!>  PROPS(5)  = NETWORK_TYPE   0=none, 1=affine, 2=non-affine, 3=mixed,
+!>                             4=contractile-AI, 5=affine-AI, 6=non-affine-AI
 !>  PROPS(6)  = DAMAGE_TYPE    0=none, 1=sigmoid
 !>  PROPS(7)  = N_VISCO        Number of Maxwell branches (0 = none)
 !>  PROPS(8:) = [iso] [aniso x N_FAM] [network] [damage] [visco x N_VISCO]
@@ -40,7 +40,8 @@ subroutine umat(stress, statev, ddsdde, sse, spd, scd, &
                                pk2_iso, sig_iso, met_iso, set_iso, &
                                pk2_anisofic, cmat_anisofic, set_jr, indexx
   use mod_hyperelastic, only: sef_neo_hooke, sef_mooney_rivlin, sef_humphrey, sef_ogden
-  use mod_anisotropic,  only: fiber_direction, sef_aniso_hgo, sef_aniso_humphrey
+  use mod_anisotropic,  only: fiber_direction, sef_aniso_hgo, sef_aniso_humphrey, &
+                               sef_aniso_humphrey_act, sef_aniso_hgo_ai
   use mod_damage,       only: damage_sigmoid
   use mod_viscosity,    only: visco_maxwell, MAX_VISCO_BRANCHES
 
@@ -100,12 +101,13 @@ subroutine umat(stress, statev, ddsdde, sse, spd, scd, &
   real(dp) :: cmanisomatfic(3,3,3,3), canisomatfic(3,3,3,3)
   real(dp) :: vorif(3), vd(3), st0(3,3)
   real(dp) :: cbari4, lambda_fib, barlambda
-  real(dp) :: k1_fib, k2_fib, kdisp_fib
-  integer  :: ifam
+  real(dp) :: k1_fib, k2_fib, kdisp_fib, t0m_act, bdisp_fib
+  real(dp) :: sfic_aniso_ai(3,3), cfic_aniso_ai(3,3,3,3), w_aniso_ai
+  integer  :: ifam, factor_aniso
 
   ! --- Network ---
   real(dp) :: phi_net, net_density, b_orient, efi, pp_naff
-  real(dp) :: filprops(6)
+  real(dp) :: filprops(8)
   real(dp) :: snet(3,3), cnet(3,3,3,3)
 
   ! --- Combined fictitious tensors ---
@@ -133,7 +135,9 @@ subroutine umat(stress, statev, ddsdde, sse, spd, scd, &
   ! --- Interface for external network subroutine ---
   interface
     subroutine network_contribution(network_type, props, ip, distgr, det, &
-                                    phi_net, snet, cnet)
+                                    phi_net, snet, cnet, &
+                                    statev, nstatev, dtime, time, kstep, noel, &
+                                    damage_type, n_visco)
       use mod_constants, only: dp
       implicit none
       integer,  intent(in)    :: network_type
@@ -141,6 +145,10 @@ subroutine umat(stress, statev, ddsdde, sse, spd, scd, &
       integer,  intent(inout) :: ip
       real(dp), intent(in)    :: distgr(3,3), det
       real(dp), intent(out)   :: phi_net, snet(3,3), cnet(3,3,3,3)
+      double precision, intent(inout) :: statev(*)
+      integer,  intent(in)    :: nstatev, kstep, noel
+      double precision, intent(in) :: dtime, time(2)
+      integer,  intent(in)    :: damage_type, n_visco
     end subroutine network_contribution
   end interface
 
@@ -261,6 +269,34 @@ subroutine umat(stress, statev, ddsdde, sse, spd, scd, &
       call pseudo_invariants(cbar, st0, det, cbari4, lambda_fib, barlambda)
       call sef_aniso_humphrey(sseaniso, daniso, diso, k1_fib, k2_fib, cbari4, cbari1)
 
+    case (ANISO_HUMPHREY_ACT)
+      k1_fib = props(ip)
+      k2_fib = props(ip+1)
+      vorif  = props(ip+2:ip+4)
+      t0m_act = props(ip+5)
+      ip = ip + 6
+
+      call fiber_direction(vorif, distgr, st0, vd)
+      call pseudo_invariants(cbar, st0, det, cbari4, lambda_fib, barlambda)
+      call sef_aniso_humphrey(sseaniso, daniso, diso, k1_fib, k2_fib, cbari4, cbari1)
+      call sef_aniso_humphrey_act(sseaniso, daniso, cbari4, predef, dpred, t0m_act)
+
+    case (ANISO_HGO_AI)
+      k1_fib    = props(ip)
+      k2_fib    = props(ip+1)
+      bdisp_fib = props(ip+2)
+      factor_aniso = nint(props(ip+3))
+      vorif     = props(ip+4:ip+6)
+      ip = ip + 7
+
+      call sef_aniso_hgo_ai(sfic_aniso_ai, cfic_aniso_ai, w_aniso_ai, &
+                             distgr, det, k1_fib, k2_fib, bdisp_fib, factor_aniso, vorif)
+
+      ! AI aniso returns sfic/cfic directly — add to totals and skip daniso path
+      sfic = sfic + sfic_aniso_ai
+      cfic = cfic + cfic_aniso_ai
+      cycle  ! skip pk2_anisofic below
+
     case default
       cycle
     end select
@@ -284,7 +320,9 @@ subroutine umat(stress, statev, ddsdde, sse, spd, scd, &
   ! blended with the matrix contribution using volume fraction PHI.
   if (network_type > 0) then
     call network_contribution(network_type, props, ip, distgr, det, &
-                              phi_net, snet, cnet)
+                              phi_net, snet, cnet, &
+                              statev, nstatev, dtime, time, kstep, noel, &
+                              damage_type, n_visco)
     ! Blend: total = (1-PHI)*matrix + PHI*network
     ! Network stress/stiffness are already in fictitious spatial frame
     sfic  = (ONE - phi_net) * sfic  + phi_net * snet
@@ -324,7 +362,7 @@ subroutine umat(stress, statev, ddsdde, sse, spd, scd, &
   ! ============================================================================
 
   ! --- Volumetric ---
-  call pk2_vol(pkvol, pv, c)
+  call pk2_vol(pkvol, pv, c, det)
   call sig_vol(svol, pv, unit2)
 
   ! --- Isochoric (projected) ---
@@ -415,10 +453,14 @@ end subroutine umat
 ! INTERNAL: Network dispatch (reads PROPS, calls the appropriate network model)
 ! ============================================================================
 subroutine network_contribution(network_type, props, ip, distgr, det, &
-                                phi_net, snet, cnet)
+                                phi_net, snet, cnet, &
+                                statev, nstatev, dtime, time, kstep, noel, &
+                                damage_type, n_visco)
   use mod_constants, only: dp, ZERO, ONE
   use mod_network,   only: affine_network, nonaffine_network, &
-                           affine_network_ai, nonaffine_network_ai
+                           affine_network_ai, nonaffine_network_ai, &
+                           mixed_network_ai, &
+                           contractile_network_ai, chemical_state
 
   implicit none
   integer,  intent(in)    :: network_type
@@ -426,11 +468,22 @@ subroutine network_contribution(network_type, props, ip, distgr, det, &
   integer,  intent(inout) :: ip
   real(dp), intent(in)    :: distgr(3,3), det
   real(dp), intent(out)   :: phi_net, snet(3,3), cnet(3,3,3,3)
+  double precision, intent(inout) :: statev(*)
+  integer,  intent(in)    :: nstatev, kstep, noel
+  double precision, intent(in) :: dtime, time(2)
+  integer,  intent(in)    :: damage_type, n_visco
 
   real(dp) :: net_density, b_orient, efi, pp_naff
-  real(dp) :: filprops(6)
-  real(dp) :: prefdir_net(3)
+  real(dp) :: density_aff, density_naff
+  real(dp) :: filprops(8)
+  real(dp) :: prefdir_net(3), prefdir_ai(3)
   integer  :: factor_ai
+
+  ! Contractile-specific variables
+  real(dp) :: fric_val, ffmax_val
+  real(dp) :: kch(7), frac(4), frac_new(4)
+  real(dp) :: ru0(2000)  ! sliding displacement workspace (must be >= nwp)
+  integer  :: nwp, sdv_off
 
   ! Quadrature data loaded via UEXTERNALDB into COMMON blocks (for RW types)
   integer, parameter :: MAX_NWP  = 720
@@ -456,12 +509,14 @@ subroutine network_contribution(network_type, props, ip, distgr, det, &
     prefdir_net(2) = props(ip+5)
     prefdir_net(3) = props(ip+6)
     filprops(1)    = props(ip+7)   ! L
-    filprops(2)    = props(ip+8)   ! R0
+    filprops(2)    = props(ip+8)   ! R0F
     filprops(3)    = props(ip+9)   ! mu0
     filprops(4)    = props(ip+10)  ! beta
     filprops(5)    = props(ip+11)  ! B0
     filprops(6)    = props(ip+12)  ! lambda0
-    ip = ip + 13
+    filprops(7)    = props(ip+13)  ! R0C
+    filprops(8)    = props(ip+14)  ! ETAC
+    ip = ip + 15
 
     call affine_network(snet, cnet, distgr, mf0, rw, nwp_active, det, &
                         filprops, net_density, b_orient, efi, prefdir_net)
@@ -478,7 +533,9 @@ subroutine network_contribution(network_type, props, ip, distgr, det, &
     filprops(4) = props(ip+8)
     filprops(5) = props(ip+9)
     filprops(6) = props(ip+10)
-    ip = ip + 11
+    filprops(7) = props(ip+11)
+    filprops(8) = props(ip+12)
+    ip = ip + 13
 
     call nonaffine_network(snet, cnet, distgr, mf0, rw, nwp_active, det, &
                            filprops, net_density, b_orient, efi, pp_naff)
@@ -493,12 +550,14 @@ subroutine network_contribution(network_type, props, ip, distgr, det, &
     prefdir_ai(2)  = props(ip+6)
     prefdir_ai(3)  = props(ip+7)
     filprops(1)    = props(ip+8)   ! L
-    filprops(2)    = props(ip+9)   ! R0
+    filprops(2)    = props(ip+9)   ! R0F
     filprops(3)    = props(ip+10)  ! mu0
     filprops(4)    = props(ip+11)  ! beta
     filprops(5)    = props(ip+12)  ! B0
     filprops(6)    = props(ip+13)  ! lambda0
-    ip = ip + 14
+    filprops(7)    = props(ip+14)  ! R0C
+    filprops(8)    = props(ip+15)  ! ETAC
+    ip = ip + 16
 
     call affine_network_ai(snet, cnet, distgr, det, &
                            filprops, net_density, b_orient, efi, factor_ai, prefdir_ai)
@@ -509,15 +568,91 @@ subroutine network_contribution(network_type, props, ip, distgr, det, &
     pp_naff        = props(ip+2)   ! non-affinity exponent
     factor_ai      = nint(props(ip+3))  ! refinement factor
     filprops(1)    = props(ip+4)   ! L
-    filprops(2)    = props(ip+5)   ! R0
+    filprops(2)    = props(ip+5)   ! R0F
     filprops(3)    = props(ip+6)   ! mu0
     filprops(4)    = props(ip+7)   ! beta
     filprops(5)    = props(ip+8)   ! B0
     filprops(6)    = props(ip+9)   ! lambda0
-    ip = ip + 10
+    filprops(7)    = props(ip+10)  ! R0C
+    filprops(8)    = props(ip+11)  ! ETAC
+    ip = ip + 12
 
     call nonaffine_network_ai(snet, cnet, distgr, det, &
                               filprops, net_density, pp_naff, factor_ai)
+
+  case (3) ! Mixed — affine + non-affine (AI)
+    phi_net        = props(ip)
+    density_naff   = props(ip+1)
+    pp_naff        = props(ip+2)
+    density_aff    = props(ip+3)
+    b_orient       = props(ip+4)
+    efi            = props(ip+5)
+    factor_ai      = nint(props(ip+6))
+    prefdir_ai(1)  = props(ip+7)
+    prefdir_ai(2)  = props(ip+8)
+    prefdir_ai(3)  = props(ip+9)
+    filprops(1)    = props(ip+10)  ! L
+    filprops(2)    = props(ip+11)  ! R0F
+    filprops(3)    = props(ip+12)  ! mu0
+    filprops(4)    = props(ip+13)  ! beta
+    filprops(5)    = props(ip+14)  ! B0
+    filprops(6)    = props(ip+15)  ! lambda0
+    filprops(7)    = props(ip+16)  ! R0C
+    filprops(8)    = props(ip+17)  ! ETAC
+    ip = ip + 18
+
+    call mixed_network_ai(snet, cnet, distgr, det, &
+                          filprops, density_naff, pp_naff, density_aff, &
+                          b_orient, efi, factor_ai, prefdir_ai)
+
+  case (4) ! Contractile (AI)
+    phi_net        = props(ip)
+    net_density    = props(ip+1)
+    b_orient       = props(ip+2)
+    efi            = props(ip+3)
+    fric_val       = props(ip+4)
+    ffmax_val      = props(ip+5)
+    factor_ai      = nint(props(ip+6))
+    prefdir_ai(1)  = props(ip+7)
+    prefdir_ai(2)  = props(ip+8)
+    prefdir_ai(3)  = props(ip+9)
+    filprops(1:8)  = props(ip+10:ip+17)
+    kch(1:7)       = props(ip+18:ip+24)
+    ip = ip + 25
+
+    ! State variable offset for contractile data
+    ! After: det(1) + damage(2 if active) + visco(9*N_VISCO)
+    sdv_off = 1
+    if (damage_type > 0) sdv_off = sdv_off + 2
+    sdv_off = sdv_off + 9 * n_visco
+
+    ! Update chemical state (forward Euler)
+    frac(1:4) = statev(sdv_off+1 : sdv_off+4)
+    ! Initialize chemical state on first increment
+    if (time(1) == ZERO .and. kstep == 1) then
+      frac(1) = ONE
+      frac(2:4) = ZERO
+    end if
+    call chemical_state(frac_new, frac, kch, dtime)
+    statev(sdv_off+1 : sdv_off+4) = frac_new
+
+    ! Load RU0 sliding displacements from state variables
+    ! (nwp is determined by contractile_network_ai)
+    ! We pre-load a generous block; actual count is returned in nwp
+    nwp = min(2000, nstatev - sdv_off - 4)
+    if (nwp > 0) then
+      ru0(1:nwp) = statev(sdv_off+5 : sdv_off+4+nwp)
+    end if
+
+    call contractile_network_ai(snet, cnet, distgr, det, &
+                                filprops, net_density, b_orient, efi, &
+                                fric_val, ffmax_val, factor_ai, prefdir_ai, &
+                                kch, dtime, ru0, frac_new, nwp)
+
+    ! Write back updated RU0 state variables
+    if (nwp > 0) then
+      statev(sdv_off+5 : sdv_off+4+nwp) = ru0(1:nwp)
+    end if
 
   case default
     phi_net = ZERO

@@ -23,8 +23,8 @@ SOURCE_FILES = [
     "mod_kinematics.f90",
     "mod_continuum.f90",
     "mod_hyperelastic.f90",
-    "mod_anisotropic.f90",
     "mod_icosahedron.f90",
+    "mod_anisotropic.f90",
     "mod_network.f90",
     "mod_damage.f90",
     "mod_viscosity.f90",
@@ -104,7 +104,166 @@ EXAMPLES = {
         "aniso_type": 0, "n_fiber_fam": 0, "aniso_params": [],
         "network_type": 5, "network_params": [
             0.5, 1.0e6, 2.0, 1.0, 6, 1.0, 0.0, 0.0,
-            1.0, 0.1, 0.01, 2.0, 0.1, 1.0,
+            1.0, 0.1, 0.01, 2.0, 0.1, 1.0, 0.0, 0.0,
+        ],
+        "damage_type": 0, "damage_params": [],
+        "n_visco": 0, "visco_params": [],
+        "test": {"stretch_max": 1.3, "gamma_max": 0.3, "nsteps": 200, "dtime": 0.01},
+    },
+    "humphrey_fiber": {
+        "name": "humphrey_fiber",
+        "kbulk": 500.0,
+        "iso_type": 4, "iso_params": [2.0, 1.5],
+        "aniso_type": 2, "n_fiber_fam": 1,
+        "aniso_params": [100.0, 10.0, 1.0, 0.0, 0.0],
+        "network_type": 0, "network_params": [],
+        "damage_type": 0, "damage_params": [],
+        "n_visco": 0, "visco_params": [],
+        "test": {"stretch_max": 1.3, "gamma_max": 0.4, "nsteps": 400, "dtime": 0.01},
+    },
+    "humphrey_hgo_damage": {
+        "name": "humphrey_hgo_damage",
+        "kbulk": 500.0,
+        "iso_type": 4, "iso_params": [2.0, 1.5],
+        "aniso_type": 1, "n_fiber_fam": 1,
+        "aniso_params": [100.0, 10.0, 0.226, 1.0, 0.0, 0.0],
+        "network_type": 0, "network_params": [],
+        "damage_type": 1, "damage_params": [5.0, 50.0],
+        "n_visco": 0, "visco_params": [],
+        "test": {"stretch_max": 1.3, "gamma_max": 0.4, "nsteps": 400, "dtime": 0.01},
+    },
+    "humphrey_fiber_damage": {
+        "name": "humphrey_fiber_damage",
+        "kbulk": 500.0,
+        "iso_type": 4, "iso_params": [2.0, 1.5],
+        "aniso_type": 2, "n_fiber_fam": 1,
+        "aniso_params": [100.0, 10.0, 1.0, 0.0, 0.0],
+        "network_type": 0, "network_params": [],
+        "damage_type": 1, "damage_params": [5.0, 50.0],
+        "n_visco": 0, "visco_params": [],
+        "test": {"stretch_max": 1.3, "gamma_max": 0.4, "nsteps": 400, "dtime": 0.01},
+    },
+    "mooney_rivlin_visco": {
+        "name": "mooney_rivlin_visco",
+        "kbulk": 1000.0,
+        "iso_type": 2, "iso_params": [6.3, 0.012],
+        "aniso_type": 0, "n_fiber_fam": 0, "aniso_params": [],
+        "network_type": 0, "network_params": [],
+        "damage_type": 0, "damage_params": [],
+        "n_visco": 1, "visco_params": [0.5, 0.25],
+        "test": {"stretch_max": 1.5, "gamma_max": 0.6, "nsteps": 400, "dtime": 0.01},
+    },
+    "ogden_visco": {
+        "name": "ogden_visco",
+        "kbulk": 1000.0,
+        "iso_type": 3,
+        "iso_params": [3, 1.3, 5.0, 0.5, -2.0, 0.012, 2.0],
+        "aniso_type": 0, "n_fiber_fam": 0, "aniso_params": [],
+        "network_type": 0, "network_params": [],
+        "damage_type": 0, "damage_params": [],
+        "n_visco": 1, "visco_params": [0.5, 0.25],
+        "test": {"stretch_max": 1.5, "gamma_max": 0.6, "nsteps": 400, "dtime": 0.01},
+    },
+    "humphrey_hgo_visco": {
+        "name": "humphrey_hgo_visco",
+        "kbulk": 500.0,
+        "iso_type": 4, "iso_params": [2.0, 1.5],
+        "aniso_type": 1, "n_fiber_fam": 1,
+        "aniso_params": [100.0, 10.0, 0.226, 1.0, 0.0, 0.0],
+        "network_type": 0, "network_params": [],
+        "damage_type": 0, "damage_params": [],
+        "n_visco": 1, "visco_params": [0.5, 0.25],
+        "test": {"stretch_max": 1.3, "gamma_max": 0.4, "nsteps": 400, "dtime": 0.01},
+    },
+    "humphrey_fiber_visco": {
+        "name": "humphrey_fiber_visco",
+        "kbulk": 500.0,
+        "iso_type": 4, "iso_params": [2.0, 1.5],
+        "aniso_type": 2, "n_fiber_fam": 1,
+        "aniso_params": [100.0, 10.0, 1.0, 0.0, 0.0],
+        "network_type": 0, "network_params": [],
+        "damage_type": 0, "damage_params": [],
+        "n_visco": 1, "visco_params": [0.5, 0.25],
+        "test": {"stretch_max": 1.3, "gamma_max": 0.4, "nsteps": 400, "dtime": 0.01},
+    },
+    "contractile_network": {
+        "name": "contractile_network",
+        "kbulk": 500.0,
+        "iso_type": 0, "iso_params": [],
+        "aniso_type": 0, "n_fiber_fam": 0, "aniso_params": [],
+        "network_type": 4, "network_params": [
+            0.5,                          # PHI
+            0.2, 2.0, 1.0,               # N, B_orient, EFI
+            11.0, 11.0,                   # FRIC, FFMAX
+            6, 1.0, 0.0, 0.0,            # factor, prefdir
+            0.988, 0.804, 38600.0, 0.438, # L, R0F, mu0, beta
+            0.065, 1.007,                 # B0, lambda0
+            0.014, 0.667,                 # R0C, ETAC
+            1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,  # KCH(7) rate constants
+        ],
+        "damage_type": 0, "damage_params": [],
+        "n_visco": 0, "visco_params": [],
+        "test": {"stretch_max": 1.2, "gamma_max": 0.2, "nsteps": 100, "dtime": 0.01},
+    },
+    "mixed_network": {
+        "name": "mixed_network",
+        "kbulk": 500.0,
+        "iso_type": 0, "iso_params": [],
+        "aniso_type": 0, "n_fiber_fam": 0, "aniso_params": [],
+        "network_type": 3, "network_params": [
+            0.5,              # PHI
+            5.0e5, 2.0,       # N_naff, PP
+            5.0e5, 2.0, 1.0,  # N_aff, B_orient, EFI
+            6, 1.0, 0.0, 0.0, # factor, prefdir
+            1.0, 0.1, 0.01, 2.0, 0.1, 1.0, 0.0, 0.0,  # filprops(8)
+        ],
+        "damage_type": 0, "damage_params": [],
+        "n_visco": 0, "visco_params": [],
+        "test": {"stretch_max": 1.3, "gamma_max": 0.3, "nsteps": 200, "dtime": 0.01},
+    },
+    "humphrey_hgo_ai": {
+        "name": "humphrey_hgo_ai",
+        "kbulk": 500.0,
+        "iso_type": 4, "iso_params": [2.0, 1.5],
+        "aniso_type": 3, "n_fiber_fam": 1,
+        "aniso_params": [100.0, 10.0, 5.0, 6, 1.0, 0.0, 0.0],
+        "network_type": 0, "network_params": [],
+        "damage_type": 0, "damage_params": [],
+        "n_visco": 0, "visco_params": [],
+        "test": {"stretch_max": 1.3, "gamma_max": 0.4, "nsteps": 200, "dtime": 0.01},
+    },
+    "affine_network_linkers": {
+        "name": "affine_network_linkers",
+        "kbulk": 500.0,
+        "iso_type": 0, "iso_params": [],
+        "aniso_type": 0, "n_fiber_fam": 0, "aniso_params": [],
+        "network_type": 5, "network_params": [
+            0.5, 1.0e6, 2.0, 1.0, 6, 1.0, 0.0, 0.0,
+            1.0, 0.1, 0.01, 2.0, 0.1, 1.0, 0.014, 0.6667,
+        ],
+        "damage_type": 0, "damage_params": [],
+        "n_visco": 0, "visco_params": [],
+        "test": {"stretch_max": 1.3, "gamma_max": 0.3, "nsteps": 200, "dtime": 0.01},
+    },
+    "humphrey_muscle": {
+        "name": "humphrey_muscle",
+        "kbulk": 500.0,
+        "iso_type": 4, "iso_params": [2.0, 1.5],
+        "aniso_type": 5, "n_fiber_fam": 1,
+        "aniso_params": [100.0, 10.0, 1.0, 0.0, 0.0, 50.0],
+        "network_type": 0, "network_params": [],
+        "damage_type": 0, "damage_params": [],
+        "n_visco": 0, "visco_params": [],
+        "test": {"stretch_max": 1.3, "gamma_max": 0.4, "nsteps": 400, "dtime": 0.01},
+    },
+    "nonaffine_network": {
+        "name": "nonaffine_network",
+        "kbulk": 500.0,
+        "iso_type": 0, "iso_params": [],
+        "aniso_type": 0, "n_fiber_fam": 0, "aniso_params": [],
+        "network_type": 6, "network_params": [
+            0.5, 1.0e6, 2.0, 6,
+            1.0, 0.1, 0.01, 2.0, 0.1, 1.0, 0.0, 0.0,
         ],
         "damage_type": 0, "damage_params": [],
         "n_visco": 0, "visco_params": [],
@@ -119,6 +278,13 @@ def compute_nstatev(cfg):
     if cfg["damage_type"] > 0:
         n += 2
     n += 9 * cfg["n_visco"]
+    if cfg["network_type"] == 4:  # contractile
+        # Extract factor from network_params (position 6, 0-indexed)
+        nparams = cfg["network_params"]
+        factor = int(nparams[6])
+        # Icosahedron: 20 faces, each subdivided into factor^2 subtriangles
+        nwp = 20 * factor * factor
+        n += 4 + nwp  # FRAC(4) + RU0(nwp)
     return n
 
 
@@ -328,6 +494,15 @@ program test_umat
   write(*, '(A)') 'Simple sh -> results/simple_shear.dat'
 
 end program test_umat
+
+! Stub for ABAQUS-provided routine (standalone builds only)
+subroutine getoutdir(outdir, lenoutdir)
+  implicit none
+  character(len=256), intent(out) :: outdir
+  integer, intent(out) :: lenoutdir
+  outdir = '.'
+  lenoutdir = 1
+end subroutine getoutdir
 """
     (outdir / "test_umat.f90").write_text(code)
 
@@ -508,17 +683,24 @@ Available model types:
     0  None
     1  HGO (dispersed)      params: K1, K2, kappa, fiber_x, fiber_y, fiber_z
     2  Humphrey fiber       params: K1, K2, fiber_x, fiber_y, fiber_z
+    3  HGO (AI discrete)    params: K1, K2, bdisp, factor, fiber_x, fiber_y, fiber_z
+    4  Humphrey (AI discrete) params: K1, K2, bdisp, factor, fiber_x, fiber_y, fiber_z
+    5  Humphrey + activation params: K1, K2, fiber_x, fiber_y, fiber_z, T0M
 
   NETWORK_TYPE:
     0  None
-    1  Affine (RW)          params: PHI, N, B_orient, EFI, pdir_x, pdir_y, pdir_z,
-                                    L, R0, mu0, beta, B0, lambda0
+    1  Affine (RW)          params: PHI, N, B_orient, EFI, pdir(3),
+                                    L, R0F, mu0, beta, B0, lambda0, R0C, ETAC
     2  Non-affine (RW)      params: PHI, N, B_orient, EFI, PP,
-                                    L, R0, mu0, beta, B0, lambda0
-    5  Affine (AI)          params: PHI, N, B_orient, EFI, factor, pdir_x, pdir_y, pdir_z,
-                                    L, R0, mu0, beta, B0, lambda0
+                                    L, R0F, mu0, beta, B0, lambda0, R0C, ETAC
+    3  Mixed (AI)           params: PHI, N_naff, PP, N_aff, B_orient, EFI, factor, pdir(3),
+                                    L, R0F, mu0, beta, B0, lambda0, R0C, ETAC
+    4  Contractile (AI)     params: PHI, N, B_orient, EFI, FRIC, FFMAX, factor, pdir(3),
+                                    L, R0F, mu0, beta, B0, lambda0, R0C, ETAC, KCH(7)
+    5  Affine (AI)          params: PHI, N, B_orient, EFI, factor, pdir(3),
+                                    L, R0F, mu0, beta, B0, lambda0, R0C, ETAC
     6  Non-affine (AI)      params: PHI, N, PP, factor,
-                                    L, R0, mu0, beta, B0, lambda0
+                                    L, R0F, mu0, beta, B0, lambda0, R0C, ETAC
 
   DAMAGE_TYPE:
     0  None

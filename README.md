@@ -28,16 +28,20 @@ These remain functional but are superseded by the modular `src/` implementation.
 
 ## Prerequisites
 
-- **ABAQUS** 2017 or later (for UMAT/UEXTERNALDB support)
-- **Fortran compiler** — one of:
-  - Intel Fortran (ifort/ifx) 2017+
-  - GNU Fortran (gfortran) 7+
-- **GNU Make** (for building outside ABAQUS)
+- **Python 3.8+** with [uv](https://docs.astral.sh/uv/) (for the generator)
+- **Fortran compiler** — gfortran 7+ or Intel Fortran 2017+
+- **GNU Make**
+- **ABAQUS** 2017+ (only for ABAQUS testing, not for standalone)
 
 ```bash
+# Set up Python environment
+uv sync
+
 # Install gfortran on Debian/Ubuntu
 sudo apt install gcc gfortran make
 ```
+
+See [docs/config_guide.md](docs/config_guide.md) for the full JSON config schema and parameter reference.
 
 ## Repository structure
 
@@ -71,15 +75,15 @@ The `generate.py` script creates a self-contained directory with everything need
 ### From a built-in example
 
 ```bash
-python generate.py --example neo_hooke
+uv run umat-generate --example neo_hooke
 ```
 
-Available examples: `neo_hooke`, `mooney_rivlin`, `humphrey_hgo`, `ogden_3term`, `neo_hooke_damage`, `neo_hooke_visco`, `affine_network`.
+Run `uv run umat-generate --list` for the full list. Current examples include: `neo_hooke`, `mooney_rivlin`, `humphrey_hgo`, `ogden_3term`, `humphrey_fiber`, `neo_hooke_damage`, `humphrey_hgo_damage`, `humphrey_fiber_damage`, `neo_hooke_visco`, `mooney_rivlin_visco`, `ogden_visco`, `humphrey_hgo_visco`, `humphrey_fiber_visco`, `affine_network`, `nonaffine_network`.
 
 ### From a JSON configuration
 
 ```bash
-python generate.py my_material.json
+uv run umat-generate my_material.json
 ```
 
 Example `my_material.json`:
@@ -111,7 +115,7 @@ Example `my_material.json`:
 ### List available model types and parameters
 
 ```bash
-python generate.py --list
+uv run umat-generate --list
 ```
 
 ### What gets generated

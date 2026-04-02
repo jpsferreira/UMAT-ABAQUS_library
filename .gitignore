@@ -20,7 +20,7 @@ materials/filamentous_network/biofilament_affine_model/vonmises_distribution_sim
 *.prt
 *.DS_Store
 *.mod
-# Generated material directories (from generate.py)
+# Generated material directories (from generate.py --example)
 /neo_hooke/
 /mooney_rivlin/
 /humphrey_hgo/
@@ -28,4 +28,18 @@ materials/filamentous_network/biofilament_affine_model/vonmises_distribution_sim
 /neo_hooke_damage/
 /neo_hooke_visco/
 /affine_network/
+/humphrey_fiber/
+/humphrey_hgo_damage/
+/humphrey_fiber_damage/
+/mooney_rivlin_visco/
+/ogden_visco/
+/humphrey_hgo_visco/
+/humphrey_fiber_visco/
+/nonaffine_network/
+# User-generated material directories
+/custom_*/
+
+# Build artifacts
 src/build/
+/validation_tmp/
+test_umat
