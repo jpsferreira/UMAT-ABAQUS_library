@@ -14,29 +14,8 @@ module mod_anisotropic
   public :: sef_aniso_humphrey_act
   public :: sef_aniso_hgo_ai
   public :: sef_aniso_humphrey_ai
-  public :: n_params_aniso
 
 contains
-
-  !> Return number of parameters per fiber family for a given aniso model.
-  pure function n_params_aniso(aniso_type) result(n)
-    integer, intent(in) :: aniso_type
-    integer :: n
-    select case (aniso_type)
-    case (1) ! HGO: K1, K2, kappa
-      n = 3
-    case (2) ! Humphrey fiber: K1, K2
-      n = 2
-    case (3) ! HGO AI: K1, K2, bdisp, factor
-      n = 4
-    case (4) ! Humphrey AI: K1, K2, bdisp, factor
-      n = 4
-    case (5) ! Humphrey + activation: K1, K2, T0M
-      n = 3
-    case default
-      n = 0
-    end select
-  end function n_params_aniso
 
   !> Compute fiber structural tensor from orientation vector.
   !> vorif = undeformed fiber direction (3-vector)
@@ -89,9 +68,12 @@ contains
     d2ud2i1 = diso(3)
 
     e1 = inv4*(ONE - THREE*kdisp) + cbari1*kdisp - ONE
-    sseaniso = (k1/k2) * (exp(k2*e1*e1) - ONE)
 
+    ! Fibers carry load only in tension (e1 > 0). The strain energy must switch
+    ! off together with the stress/stiffness; otherwise it reports energy with no
+    ! conjugate stress and corrupts the damage criterion (sef = sseiso+sseaniso).
     if (e1 > ZERO) then
+      sseaniso = (k1/k2) * (exp(k2*e1*e1) - ONE)
       ee2 = exp(k2 * e1*e1)
       ee3 = ONE + TWO*k2*e1*e1
 
@@ -104,6 +86,7 @@ contains
       d2dudi1di4  = k1*(ONE - THREE*kdisp)*kdisp*ee3*ee2
       d2dudi2di4  = ZERO
     else
+      sseaniso   = ZERO
       dudi4      = ZERO
       d2ud2i4    = ZERO
       d2dudi1di4 = ZERO
@@ -130,10 +113,11 @@ contains
     real(dp) :: lambda, e1, e2, e3, e4, e5
 
     lambda = sqrt(inv4)
-    sseaniso = k1 * (exp(k2*(lambda - ONE)**2) - ONE)
-
     e1 = lambda - ONE
+
+    ! Tension-only: energy switches off with the stress/stiffness (see HGO note).
     if (e1 > ZERO) then
+      sseaniso = k1 * (exp(k2*e1*e1) - ONE)
       e3 = exp(k2 * e1*e1)
       e2 = TWO * k1 * k2
       e4 = ONE + TWO*k2*e1*e1*lambda
@@ -142,6 +126,7 @@ contains
       daniso(1) = e2*e1*e3 / (TWO*lambda)       ! dW/dI4
       daniso(2) = e2*e3*e4 / e5                  ! d2W/dI4^2
     else
+      sseaniso  = ZERO
       daniso(1) = ZERO
       daniso(2) = ZERO
     end if

@@ -712,6 +712,32 @@ Available model types:
 Example configs: """ + ", ".join(EXAMPLES.keys()))
 
 
+def sphere_quadrature(n=60):
+    """Quasi-uniform unit-sphere quadrature in the format UEXTERNALDB reads
+    ('x y z weight' per line, weights = 1/n). Fibonacci spiral; a generic
+    orientation quadrature for the RW network types (1, 2). Replace with a
+    higher-order spherical design for production accuracy if needed."""
+    import math
+    ga = math.pi * (3.0 - math.sqrt(5.0))
+    w = 1.0 / n
+    lines = []
+    for i in range(n):
+        z = 1.0 - 2.0 * (i + 0.5) / n
+        r = math.sqrt(max(0.0, 1.0 - z * z))
+        th = ga * i
+        lines.append(f"{r*math.cos(th):.13f} {r*math.sin(th):.13f} {z:.13f} {w:.13f}")
+    return "\n".join(lines) + "\n"
+
+
+def generate_quadrature(outdir, cfg):
+    """Ship a sphere quadrature for the RW network types (1, 2), which read it
+    via UEXTERNALDB. AI types (3-6) integrate over an icosahedron and need none."""
+    if cfg["network_type"] in (1, 2):
+        content = sphere_quadrature(60)
+        (outdir / "sphere_int60c.inp").write_text(content)
+        (outdir / "abaqus" / "sphere_int60c.inp").write_text(content)
+
+
 def generate(cfg):
     name = cfg["name"]
     outdir = SCRIPT_DIR / name
@@ -722,6 +748,7 @@ def generate(cfg):
     generate_test_driver(outdir, cfg)
     generate_makefile(outdir)
     generate_abaqus_dir(outdir, cfg)
+    generate_quadrature(outdir, cfg)
 
     # Save the config for reproducibility
     (outdir / "config.json").write_text(json.dumps(cfg, indent=2) + "\n")

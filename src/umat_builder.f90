@@ -7,10 +7,11 @@
 !>
 !>  PROPS(1)  = KBULK         Bulk modulus
 !>  PROPS(2)  = ISO_TYPE       0=none, 1=NH, 2=MR, 3=Ogden, 4=Humphrey
-!>  PROPS(3)  = ANISO_TYPE     0=none, 1=HGO, 2=Humphrey-fiber
+!>  PROPS(3)  = ANISO_TYPE     0=none, 1=HGO, 2=Humphrey-fiber,
+!>                             3=HGO-AI, 4=Humphrey-AI, 5=Humphrey-activation
 !>  PROPS(4)  = N_FIBER_FAM    Number of fiber families (0, 1, or 2)
-!>  PROPS(5)  = NETWORK_TYPE   0=none, 1=affine, 2=non-affine, 3=mixed,
-!>                             4=contractile-AI, 5=affine-AI, 6=non-affine-AI
+!>  PROPS(5)  = NETWORK_TYPE   0=none, 1=affine(RW), 2=non-affine(RW), 3=mixed(AI),
+!>                             4=contractile(AI), 5=affine(AI), 6=non-affine(AI)
 !>  PROPS(6)  = DAMAGE_TYPE    0=none, 1=sigmoid
 !>  PROPS(7)  = N_VISCO        Number of Maxwell branches (0 = none)
 !>  PROPS(8:) = [iso] [aniso x N_FAM] [network] [damage] [visco x N_VISCO]
@@ -31,7 +32,7 @@ subroutine umat(stress, statev, ddsdde, sse, spd, scd, &
      celent, dfgrd0, dfgrd1, noel, npt, layer, kspt, kstep, kinc)
 
   use mod_constants
-  use mod_tensor,       only: onem, push2, push4
+  use mod_tensor,       only: onem, push2, push4, pull2, pull4, matinv3d
   use mod_kinematics,   only: distortion_gradient, cauchy_green, invariants, &
                                pseudo_invariants, stretch_tensors, rotation_tensor, &
                                projection_euler, projection_lagrange
@@ -95,6 +96,7 @@ subroutine umat(stress, statev, ddsdde, sse, spd, scd, &
   real(dp) :: pkmatfic(3,3), sisomatfic(3,3)
   real(dp) :: cmisomatfic(3,3,3,3), cisomatfic(3,3,3,3)
   integer  :: n_ogden_terms
+  logical  :: iso_fic_active
 
   ! --- Isochoric anisotropic ---
   real(dp) :: sseaniso, daniso(4)
@@ -104,6 +106,7 @@ subroutine umat(stress, statev, ddsdde, sse, spd, scd, &
   real(dp) :: cbari4, lambda_fib, barlambda
   real(dp) :: k1_fib, k2_fib, kdisp_fib, t0m_act, bdisp_fib
   real(dp) :: sfic_aniso_ai(3,3), cfic_aniso_ai(3,3,3,3), w_aniso_ai
+  real(dp) :: finv(3,3)
   integer  :: ifam, factor_aniso
 
   ! --- Network ---
@@ -123,6 +126,8 @@ subroutine umat(stress, statev, ddsdde, sse, spd, scd, &
 
   ! --- Damage ---
   real(dp) :: dmg, dmg_red, dmg_diff, sef0_hist, beta_d, psi_half
+  real(dp) :: pkiso0(3,3), siso0(3,3)   ! undamaged isochoric stress (for consistent tangent)
+  integer  :: di, dj, dk, dl
 
   ! --- Viscosity ---
   real(dp) :: vscprops(2*MAX_VISCO_BRANCHES)
@@ -188,12 +193,30 @@ subroutine umat(stress, statev, ddsdde, sse, spd, scd, &
       statev(2) = ZERO  ! damage
       statev(3) = ZERO  ! max SEF
     end if
+    ! Explicitly zero the viscous hidden-stress tensors (9 per branch). ABAQUS
+    ! zero-inits STATEV, but being explicit guards restarts / re-used arrays.
+    if (n_visco > 0) then
+      sdv_offset_visco = 1
+      if (damage_type > 0) sdv_offset_visco = 3
+      do i = sdv_offset_visco + 1, min(sdv_offset_visco + 9*n_visco, nstatev)
+        statev(i) = ZERO
+      end do
+    end if
   end if
 
   ! ============================================================================
   ! KINEMATICS
   ! ============================================================================
   call distortion_gradient(dfgrd1, distgr, det)
+
+  ! Guard against an inverted/degenerate element (det(F) <= 0). det**(-1/3) and
+  ! C^{-1} are undefined there (NaN); rather than poison the Newton iteration,
+  ! ask ABAQUS to cut the increment back and return.
+  if (det <= ZERO) then
+    pnewdt = HALF
+    return
+  end if
+
   call cauchy_green(dfgrd1, c, b)
   call cauchy_green(distgr, cbar, bbar)
   call invariants(cbar, cbari1, cbari2)
@@ -232,19 +255,14 @@ subroutine umat(stress, statev, ddsdde, sse, spd, scd, &
     ! no isotropic contribution
   end select
 
-  ! Isotropic fictitious stress and stiffness (if any iso model active)
-  if (iso_type > 0) then
-    call pk2_isomatfic(pkmatfic, diso, cbar, cbari1, unit2)
-    call sig_isomatfic(sisomatfic, pkmatfic, distgr, det)
-    call cmat_isomatfic(cmisomatfic, cbar, cbari1, cbari2, diso, unit2, unit4, det)
-    call cs_isomatfic(cisomatfic, cmisomatfic, distgr, det)
-  end if
+  ! Whether the isotropic fictitious tensors must be built. An HGO fiber family
+  ! with dispersion (kdisp > 0) feeds the I1 channel back into diso, so this is
+  ! also switched on inside the fiber loop below.
+  iso_fic_active = (iso_type > 0)
 
-  ! Start accumulating fictitious tensors
-  pkfic  = pkmatfic
-  sfic   = sisomatfic
-  cmfic  = cmisomatfic
-  cfic   = cisomatfic
+  ! Fictitious totals start at ZERO (already zeroed during initialization). The
+  ! isotropic contribution is added AFTER the fiber loop so that diso reflects
+  ! any HGO I1-I4 dispersion coupling fed back by sef_aniso_hgo.
 
   ! --- Anisotropic contribution (fiber families) ---
   do ifam = 1, n_fiber_fam
@@ -259,6 +277,7 @@ subroutine umat(stress, statev, ddsdde, sse, spd, scd, &
       call fiber_direction(vorif, distgr, st0, vd)
       call pseudo_invariants(cbar, st0, det, cbari4, lambda_fib, barlambda)
       call sef_aniso_hgo(sseaniso, daniso, diso, k1_fib, k2_fib, kdisp_fib, cbari4, cbari1)
+      iso_fic_active = .true.  ! HGO dispersion couples into the I1 (diso) channel
 
     case (ANISO_HUMPHREY)
       k1_fib = props(ip)
@@ -293,10 +312,17 @@ subroutine umat(stress, statev, ddsdde, sse, spd, scd, &
       call sef_aniso_hgo_ai(sfic_aniso_ai, cfic_aniso_ai, w_aniso_ai, &
                              distgr, det, k1_fib, k2_fib, bdisp_fib, factor_aniso, vorif)
 
-      ! AI aniso returns sfic/cfic directly — add to totals and skip daniso path
-      sfic = sfic + sfic_aniso_ai
-      cfic = cfic + cfic_aniso_ai
-      cycle  ! skip pk2_anisofic below
+      ! AI aniso returns spatial sfic/cfic. Pull back to the material frame so the
+      ! fiber also enters pkfic/cmfic — needed for the viscous path (PK2/material
+      ! tangent) and to mirror the non-AI fiber (D1 fix). Then skip the daniso path.
+      call matinv3d(distgr, finv)
+      call pull2(pkmatficaniso, sfic_aniso_ai, finv, det)
+      call pull4(cmanisomatfic, cfic_aniso_ai, finv, det)
+      pkfic = pkfic + pkmatficaniso
+      sfic  = sfic  + sfic_aniso_ai
+      cmfic = cmfic + cmanisomatfic
+      cfic  = cfic  + cfic_aniso_ai
+      cycle
 
     case (ANISO_HUMPHREY_AI)
       k1_fib    = props(ip)
@@ -309,9 +335,15 @@ subroutine umat(stress, statev, ddsdde, sse, spd, scd, &
       call sef_aniso_humphrey_ai(sfic_aniso_ai, cfic_aniso_ai, w_aniso_ai, &
                                   distgr, det, k1_fib, k2_fib, bdisp_fib, factor_aniso, vorif)
 
-      sfic = sfic + sfic_aniso_ai
-      cfic = cfic + cfic_aniso_ai
-      cycle  ! skip pk2_anisofic below
+      ! Pull back to the material frame (D1 fix — see ANISO_HGO_AI above).
+      call matinv3d(distgr, finv)
+      call pull2(pkmatficaniso, sfic_aniso_ai, finv, det)
+      call pull4(cmanisomatfic, cfic_aniso_ai, finv, det)
+      pkfic = pkfic + pkmatficaniso
+      sfic  = sfic  + sfic_aniso_ai
+      cmfic = cmfic + cmanisomatfic
+      cfic  = cfic  + cfic_aniso_ai
+      cycle
 
     case default
       cycle
@@ -330,23 +362,36 @@ subroutine umat(stress, statev, ddsdde, sse, spd, scd, &
     cfic  = cfic  + canisomatfic
   end do
 
+  ! --- Isochoric isotropic fictitious tensors ---
+  ! Built AFTER the fiber loop so diso includes any HGO I1-I4 dispersion coupling
+  ! fed back by sef_aniso_hgo, then added to the (so far anisotropic-only) totals.
+  if (iso_fic_active) then
+    call pk2_isomatfic(pkmatfic, diso, cbar, cbari1, unit2)
+    call sig_isomatfic(sisomatfic, pkmatfic, distgr, det)
+    call cmat_isomatfic(cmisomatfic, cbar, cbari1, cbari2, diso, unit2, unit4, det)
+    call cs_isomatfic(cisomatfic, cmisomatfic, distgr, det)
+    pkfic = pkfic + pkmatfic
+    sfic  = sfic  + sisomatfic
+    cmfic = cmfic + cmisomatfic
+    cfic  = cfic  + cisomatfic
+  end if
+
   ! --- Network contribution ---
-  ! Network models require quadrature data loaded via UEXTERNALDB.
-  ! They produce their own fictitious stress/stiffness in the spatial frame,
-  ! blended with the matrix contribution using volume fraction PHI.
+  ! Compute the network now (this advances the PROPS pointer past the network
+  ! params), but DEFER the matrix/network blend until AFTER damage, so damage
+  ! scales only the matrix — consistent with the damage criterion, which uses
+  ! the matrix energy and excludes the network (D3). Network models require
+  ! quadrature data loaded via UEXTERNALDB; snet/cnet are fictitious spatial.
   if (network_type > 0) then
     call network_contribution(network_type, props, ip, distgr, det, &
                               phi_net, snet, cnet, &
                               statev, nstatev, dtime, time, kstep, noel, &
                               damage_type, n_visco)
-    ! Blend: total = (1-PHI)*matrix + PHI*network
-    ! Network stress/stiffness are already in fictitious spatial frame
-    sfic  = (ONE - phi_net) * sfic  + phi_net * snet
-    cfic  = (ONE - phi_net) * cfic  + phi_net * cnet
-    pkfic = (ONE - phi_net) * pkfic  ! PK2 only has matrix part
+  else
+    phi_net = ZERO
   end if
 
-  ! --- Damage modification ---
+  ! --- Damage modification (matrix only; applied BEFORE the network blend) ---
   if (damage_type == DMG_SIGMOID) then
     beta_d   = props(ip)
     psi_half = props(ip+1)
@@ -360,9 +405,12 @@ subroutine umat(stress, statev, ddsdde, sse, spd, scd, &
     statev(2) = dmg
     statev(3) = sef0_hist
 
-    ! Apply damage reduction to fictitious tensors
-    ! Consistent tangent: C_damaged = (1-d)*C + d'*S (x) dW/dC
-    ! Simplified: scale both stress and stiffness by damage reduction
+    ! Capture the UNDAMAGED matrix isochoric stresses before scaling. They drive
+    ! the consistent-tangent softening term d'(W)*S0 (x) S0, added after assembly.
+    call pk2_iso(pkiso0, pkfic, projl, det)
+    call sig_iso(siso0, sfic, proje)
+
+    ! Secant scaling of the MATRIX (the network, blended below, is left undamaged).
     pkfic = dmg_red * pkfic
     sfic  = dmg_red * sfic
     cmfic = dmg_red * cmfic
@@ -371,6 +419,15 @@ subroutine umat(stress, statev, ddsdde, sse, spd, scd, &
     ! Scale strain energy for consistency with damaged stress
     sseiso   = dmg_red * sseiso
     sseaniso = dmg_red * sseaniso
+  end if
+
+  ! --- Blend the (now damaged) matrix with the pristine network ---
+  ! total = (1-PHI)*matrix + PHI*network; the network is NOT damaged here and
+  ! (in the viscous branch below) is NOT relaxed.
+  if (network_type > 0) then
+    sfic  = (ONE - phi_net) * sfic  + phi_net * snet
+    cfic  = (ONE - phi_net) * cfic  + phi_net * cnet
+    pkfic = (ONE - phi_net) * pkfic   ! network has no PK2 part
   end if
 
   ! ============================================================================
@@ -399,6 +456,27 @@ subroutine umat(stress, statev, ddsdde, sse, spd, scd, &
   ! --- Spatial elasticity ---
   call set_vol(cvol, pv, ppv, unit2, unit4s)
   call set_iso(ciso, cfic, proje, siso, sfic, unit2)
+
+  ! --- Consistent damage softening term ---
+  ! sigma = sigma_vol + d_red(W)*sigma_iso0, so the tangent gains
+  !   material: C_m += d'(W) * S_iso0 (x) S_iso0
+  !   spatial:  c   += d'(W) * J * sigma_iso0 (x) sigma_iso0
+  ! (dmg_diff = d(d_red)/dW < 0; it is ZERO unless damage is actively growing).
+  if (damage_type == DMG_SIGMOID .and. dmg_diff /= ZERO) then
+    do di = 1, 3
+      do dj = 1, 3
+        do dk = 1, 3
+          do dl = 1, 3
+            cmiso(di,dj,dk,dl) = cmiso(di,dj,dk,dl) &
+                               + dmg_diff * pkiso0(di,dj) * pkiso0(dk,dl)
+            ciso(di,dj,dk,dl)  = ciso(di,dj,dk,dl) &
+                               + dmg_diff * det * siso0(di,dj) * siso0(dk,dl)
+          end do
+        end do
+      end do
+    end do
+  end if
+
   call set_jr(cjr, sigma, unit2)
   ddsigdde = cvol + ciso + cjr
 
@@ -438,10 +516,12 @@ subroutine umat(stress, statev, ddsdde, sse, spd, scd, &
     sigma    = sigma_visc
     ddsigdde = cspatial_visc + cjr
 
-    ! Re-add network spatial contribution (viscosity applies to matrix only)
+    ! Re-add the network (viscosity relaxes the matrix only; the network is
+    ! pristine — NOT relaxed). Use snet/cnet directly, NOT the blended sfic/cfic,
+    ! so the (1-phi)*matrix + phi*network blend is not double-counted (D2).
     if (network_type > 0) then
-      call sig_iso(siso, sfic, proje)
-      call set_iso(ciso, cfic, proje, siso, sfic, unit2)
+      call sig_iso(siso, snet, proje)
+      call set_iso(ciso, cnet, proje, siso, snet, unit2)
       sigma    = sigma    + phi_net * siso
       ddsigdde = ddsigdde + phi_net * ciso
     end if
@@ -538,23 +618,26 @@ subroutine network_contribution(network_type, props, ip, distgr, det, &
                         filprops, net_density, b_orient, efi, prefdir_net)
 
   case (2) ! Non-affine (quadrature weights)
-    phi_net     = props(ip)
-    net_density = props(ip+1)
-    b_orient    = props(ip+2)
-    efi         = props(ip+3)
-    pp_naff     = props(ip+4)   ! non-affinity exponent
-    filprops(1) = props(ip+5)
-    filprops(2) = props(ip+6)
-    filprops(3) = props(ip+7)
-    filprops(4) = props(ip+8)
-    filprops(5) = props(ip+9)
-    filprops(6) = props(ip+10)
-    filprops(7) = props(ip+11)
-    filprops(8) = props(ip+12)
-    ip = ip + 13
+    phi_net        = props(ip)
+    net_density    = props(ip+1)
+    b_orient       = props(ip+2)
+    efi            = props(ip+3)
+    pp_naff        = props(ip+4)   ! non-affinity exponent
+    prefdir_net(1) = props(ip+5)   ! preferred direction
+    prefdir_net(2) = props(ip+6)
+    prefdir_net(3) = props(ip+7)
+    filprops(1)    = props(ip+8)
+    filprops(2)    = props(ip+9)
+    filprops(3)    = props(ip+10)
+    filprops(4)    = props(ip+11)
+    filprops(5)    = props(ip+12)
+    filprops(6)    = props(ip+13)
+    filprops(7)    = props(ip+14)
+    filprops(8)    = props(ip+15)
+    ip = ip + 16
 
     call nonaffine_network(snet, cnet, distgr, mf0, rw, nwp_active, det, &
-                           filprops, net_density, b_orient, efi, pp_naff)
+                           filprops, net_density, b_orient, efi, pp_naff, prefdir_net)
 
   case (5) ! Affine — angular integration (icosahedron)
     phi_net        = props(ip)

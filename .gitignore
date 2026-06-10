@@ -43,3 +43,11 @@ materials/filamentous_network/biofilament_affine_model/vonmises_distribution_sim
 src/build/
 /validation_tmp/
 test_umat
+
+# Python artifacts
+__pycache__/
+*.pyc
+*.egg-info/
+
+# Local working notes (not part of the repo)
+tasks/

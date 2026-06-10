@@ -155,6 +155,21 @@ make run          # Compiles umat.f90 + test_umat.f90, runs all load cases
 
 Output files are written to `my_material/results/` (uniaxial.dat, biaxial.dat, shear.dat, simple_shear.dat).
 
+### Numerical verification suite
+
+A standalone correctness suite (gfortran only — no ABAQUS, no third-party deps)
+checks the constitutive routines directly:
+
+```bash
+make verify          # or: .venv/bin/python tests/run_all.py
+```
+
+It covers: the analytic material tangent (`DDSDDE`) vs finite differences, the
+volumetric + isotropic + anisotropic additive decomposition, closed-form stress
+oracles, time evolution (viscoelastic relaxation, damage ratchet), PROPS-layout
+consistency, the filament-network battery, feature recombination, and robustness
+(graceful cutback on element inversion). See `tests/README.md` for details.
+
 ### Running in ABAQUS
 
 ```bash

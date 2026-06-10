@@ -10,9 +10,14 @@ EXAMPLES = neo_hooke mooney_rivlin ogden_3term humphrey_hgo humphrey_fiber \
            humphrey_hgo_visco humphrey_fiber_visco \
            affine_network nonaffine_network
 
-.PHONY: all examples test validate clean
+.PHONY: all examples test verify validate clean
 
 all: test
+
+# Run the standalone numerical-correctness suite (tangent, additive, oracles).
+# No ABAQUS required; see tests/README.md.
+verify:
+	$(PYTHON) tests/run_all.py
 
 # Generate all built-in examples
 examples:

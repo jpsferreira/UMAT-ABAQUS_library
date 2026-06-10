@@ -281,6 +281,14 @@ contains
   end subroutine pk2_anisofic
 
   !> Anisotropic "fictitious" material elasticity tensor.
+  !>
+  !> Handles the I4 term (daniso(2) = d2W/dI4^2) and the I1-I4 dispersion coupling
+  !> (daniso(3) = d2W/dI1dI4, e.g. HGO with kappa>0). The I2-I4 coupling
+  !> daniso(4) = d2W/dI2dI4 is intentionally NOT included: every fiber model here
+  !> is I1/I4-based (daniso(4) == 0 for HGO, Humphrey, and the AI variants), and
+  !> pk2_anisofic has no I2-conjugate stress term either. If an I2-dependent fiber
+  !> model is ever added, extend BOTH pk2_anisofic (the I2 stress) and this routine
+  !> (the +daniso(4)*((I1*I - Cbar)(x)M0 + M0(x)(I1*I - Cbar)) block) together. (C3)
   subroutine cmat_anisofic(cmaniso, st0, daniso, unit2, det)
     real(dp), intent(out) :: cmaniso(3,3,3,3)
     real(dp), intent(in)  :: st0(3,3), daniso(4), unit2(3,3), det
@@ -359,6 +367,9 @@ contains
     ddsdde(3,2) = ddsigdde(3,3,2,2)
     ddsdde(3,3) = ddsigdde(3,3,3,3)
 
+    ! Shear blocks: the engineering-shear factor of 2 is absorbed by the minor
+    ! symmetry of ddsigdde (c_ij12 = c_ij21), so off-diagonal entries map directly
+    ! with NO 1/2 or 2 multiplier. (Verified vs the finite-difference tangent.)
     if (ntens > 3) then
       ddsdde(1,4) = ddsigdde(1,1,1,2)
       ddsdde(2,4) = ddsigdde(2,2,1,2)

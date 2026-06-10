@@ -235,6 +235,26 @@ contains
   end subroutine filament_stress_fic
 
   !> Single filament contribution to fictitious spatial elasticity tensor.
+  !>
+  !> CONSISTENT TANGENT (push-forward form). The filament stress is built as a
+  !> fictitious Cauchy stress  sfic = (1/J) (dw/lambda) mhat(x)mhat  with
+  !> lambda=|Fbar.m0| and mhat the unit deformed direction. This is the
+  !> push-forward of the fictitious 2nd-PK stress  Sfic = s0 M0,
+  !> s0 = dw/lambda^3, M0 = m0(x)m0 (since push2(s0 M0) = (1/J) s0 lambda^2 mm).
+  !>
+  !> The spatial elasticity that is work-conjugate-consistent with this stress
+  !> through the sig_iso/set_iso/set_jr deviatoric+Jaumann pipeline is the
+  !> push-forward of the material fictitious elasticity  Cfic = 4 d2W*/dI4^2 M0(x)M0,
+  !> where  dW*/dI4 = s0/2 = dw/(2 lambda^3),  I4 = lambda^2, so
+  !>   d2W*/dI4^2 = ddw/(4 lambda^4) - 3 dw/(4 lambda^5).
+  !> push4 of M0(x)M0 brings a factor (1/J) lambda^4 mhat^(x)4, giving the
+  !> per-filament spatial scale  (1/J) (ddw - 3 dw/lambda).  The global 1/J is
+  !> applied by coeff=N*4pi/det in the caller, so the scale stored here is
+  !>   (ddw - 3 dw/lambda).
+  !> Verified consistent to ~1e-10 vs the Miehe symmetric-perturbation FD tangent
+  !> (the same check the verified AI-aniso fiber path passes).
+  !> NOTE: this REPLACES the legacy CSFILFIC scale (ddw - dw/lambda)/lambda^2,
+  !> which was a direct (inconsistent) spatial form, not a push-forward.
   subroutine filament_stiffness_fic(cfil, rho, lambda, dw, ddw, mfi, rw)
     real(dp), intent(out) :: cfil(3,3,3,3)
     real(dp), intent(in)  :: rho, lambda, dw, ddw, mfi(3), rw
@@ -242,7 +262,7 @@ contains
     integer  :: i, j, k, l
 
     if (lambda > ZERO) then
-      scale = rho * (ddw - dw/lambda) / (lambda*lambda) * rw
+      scale = rho * (ddw - THREE*dw/lambda) * rw
     else
       scale = ZERO
     end if
@@ -329,8 +349,11 @@ contains
     pi    = FOUR * atan(ONE)
     coeff = net_density / det * FOUR * pi
 
-    ! Compute deformed preferred direction
-    pd = matmul(f, prefdir)
+    ! Reference preferred direction (the orientation distribution is a MATERIAL
+    ! property fixed in the reference configuration; using the deformed prefdir
+    ! makes rho deformation-dependent, which breaks the consistent tangent — see
+    ! the note in filament_stiffness_fic).
+    pd = prefdir
     pd_norm = sqrt(dot_product(pd, pd))
     if (pd_norm > ZERO) pd = pd / pd_norm
 
@@ -349,7 +372,9 @@ contains
         lambdaf = lambdai
       end if
 
-      call compute_bangle(angle, mfi, pd)
+      ! Density on the REFERENCE direction m0 vs reference preferred direction
+      ! (deformation-independent -> consistent tangent).
+      call compute_bangle(angle, m0i, pd)
       call orientation_density(rho, angle, b_orient, efi)
 
       call filament_force(fi, ffi, dwi, ddwi, lambdaf, lambda0, ll, r0_eff, mu0, beta, b0)
@@ -388,19 +413,21 @@ contains
   !>
   !> @param[in] pp Non-affinity exponent (p)
   subroutine nonaffine_network(sfic, cfic, f, mf0, rw, nwp, det, &
-                               filprops, net_density, b_orient, efi, pp)
+                               filprops, net_density, b_orient, efi, pp, prefdir)
+    use mod_tensor, only: push2, push4
     real(dp), intent(out) :: sfic(3,3), cfic(3,3,3,3)
     real(dp), intent(in)  :: f(3,3), det
     integer,  intent(in)  :: nwp
     real(dp), intent(in)  :: mf0(:,:), rw(:)
     real(dp), intent(in)  :: filprops(8), net_density, b_orient, efi, pp
+    real(dp), intent(in)  :: prefdir(3)
 
-    real(dp) :: pi, coeff
+    real(dp) :: pd(3)
     real(dp) :: ll, r0, mu0, beta, b0, lambda0, r0c, etac, r0_eff
     real(dp) :: m0i(3), mfi(3), lambdai, lambdaf
-    real(dp) :: lambda_eff, sum_lp, fi, ffi, dw, ddw
-    real(dp) :: h2(3,3), h4(3,3,3,3), rho, angle
-    real(dp) :: scale_s, scale_c1, scale_c2
+    real(dp) :: lambda_eff, aval, fi, ffi, dw, ddw, aux_h, aux_hh
+    real(dp) :: h2m(3,3), h4m(3,3,3,3), rho, angle
+    real(dp) :: dlam(3,3), d2lam(3,3,3,3), sfic_mat(3,3), cfic_mat(3,3,3,3)
     integer  :: ip, i, j, k, l
 
     ll      = filprops(1)
@@ -418,13 +445,19 @@ contains
       r0_eff = r0
     end if
 
-    pi    = FOUR * atan(ONE)
-    coeff = net_density / det
+    pd = prefdir   ! reference preferred direction (deformation-independent density)
 
-    ! First pass: compute effective stretch and structure tensors
-    sum_lp = ZERO
-    h2 = ZERO
-    h4 = ZERO
+    ! Material-frame non-affine microsphere with orientation density (C5 fix,
+    ! mirrors the verified nonaffine_network_ai but density-weighted and using the
+    ! RW quadrature). Accumulate, with reference structure tensors M0=m0(x)m0:
+    !   A    = sum rho * lambda^p * rw                    (= <lambda^p>_rho)
+    !   H2m  = dA/dCbar    = sum rho (p/2) lambda^(p-2) rw M0
+    !   H4m  = d2A/dCbar^2 = sum rho (p/2)(p/2-1) lambda^(p-4) rw M0(x)M0
+    ! then differentiate Lambda=A^(1/p) and push forward. (Replaces the old spatial
+    ! h2/h4 + scale_s assembly, which was neither the right stress nor consistent.)
+    aval = ZERO
+    h2m  = ZERO
+    h4m  = ZERO
 
     do ip = 1, nwp
       m0i = mf0(ip, :)
@@ -438,26 +471,21 @@ contains
       end if
       lambdai = lambdaf  ! Use filament stretch for averaging
 
-      angle = ZERO
+      ! Orientation density on the REFERENCE direction (deformation-independent
+      ! => rho is constant w.r.t. Cbar, keeping the tangent consistent).
+      call compute_bangle(angle, m0i, pd)
       call orientation_density(rho, angle, b_orient, efi)
 
       if (lambdai > ZERO) then
-        sum_lp = sum_lp + rho * lambdai**pp * rw(ip)
-
-        ! 2nd-order structure tensor
+        aux_h  = rho * (pp*HALF) * lambdai**(pp-TWO) * rw(ip)
+        aux_hh = rho * (pp*HALF) * (pp*HALF - ONE) * lambdai**(pp-FOUR) * rw(ip)
+        aval = aval + rho * lambdai**pp * rw(ip)
         do i = 1, 3
           do j = 1, 3
-            h2(i,j) = h2(i,j) + rho * lambdai**(pp-TWO) * rw(ip) * mfi(i)*mfi(j)
-          end do
-        end do
-
-        ! 4th-order structure tensor
-        do i = 1, 3
-          do j = 1, 3
+            h2m(i,j) = h2m(i,j) + aux_h * m0i(i)*m0i(j)
             do k = 1, 3
               do l = 1, 3
-                h4(i,j,k,l) = h4(i,j,k,l) + rho * (pp-TWO) * lambdai**(pp-FOUR) &
-                             * rw(ip) * mfi(i)*mfi(j)*mfi(k)*mfi(l)
+                h4m(i,j,k,l) = h4m(i,j,k,l) + aux_hh * m0i(i)*m0i(j)*m0i(k)*m0i(l)
               end do
             end do
           end do
@@ -466,8 +494,8 @@ contains
     end do
 
     ! Effective stretch
-    if (sum_lp > ZERO) then
-      lambda_eff = sum_lp**(ONE/pp)
+    if (aval > ZERO) then
+      lambda_eff = aval**(ONE/pp)
     else
       lambda_eff = ONE
     end if
@@ -475,22 +503,41 @@ contains
     ! Evaluate single filament at effective stretch
     call filament_force(fi, ffi, dw, ddw, lambda_eff, lambda0, ll, r0_eff, mu0, beta, b0)
 
-    ! Assemble stress and stiffness
-    scale_s  = coeff * dw * lambda_eff**(ONE - pp)
-    scale_c1 = coeff * dw * lambda_eff**(ONE - pp)
-    scale_c2 = coeff * (ddw * lambda_eff**(TWO*(ONE-pp)) &
-             - (pp-ONE) * dw * lambda_eff**(ONE - TWO*pp))
+    ! dLambda/dCbar and d2Lambda/dCbar^2
+    if (aval > ZERO) then
+      dlam = (ONE/pp) * aval**(ONE/pp - ONE) * h2m
+      do i = 1, 3
+        do j = 1, 3
+          do k = 1, 3
+            do l = 1, 3
+              d2lam(i,j,k,l) = (ONE/pp) * ( &
+                   (ONE/pp - ONE) * aval**(ONE/pp - TWO) * h2m(i,j)*h2m(k,l) &
+                 + aval**(ONE/pp - ONE) * h4m(i,j,k,l) )
+            end do
+          end do
+        end do
+      end do
+    else
+      dlam = ZERO
+      d2lam = ZERO
+    end if
 
-    sfic = scale_s * h2
+    ! Material fictitious 2-PK stress and elasticity (Psi = N*W(Lambda)), pushed
+    ! forward (1/det handled by push2/push4) — consistent by construction.
+    sfic_mat = TWO * net_density * dw * dlam
     do i = 1, 3
       do j = 1, 3
         do k = 1, 3
           do l = 1, 3
-            cfic(i,j,k,l) = scale_c1 * h4(i,j,k,l) + scale_c2 * h2(i,j)*h2(k,l)
+            cfic_mat(i,j,k,l) = FOUR * net_density * ( &
+                 ddw * dlam(i,j)*dlam(k,l) + dw * d2lam(i,j,k,l) )
           end do
         end do
       end do
     end do
+
+    call push2(sfic, sfic_mat, f, det)
+    call push4(cfic, cfic_mat, f, det)
   end subroutine nonaffine_network
 
   !> Compute the angle between a deformed filament direction and a preferred direction.
@@ -590,8 +637,9 @@ contains
     sfic = ZERO
     cfic = ZERO
 
-    ! Compute deformed preferred direction
-    pd = matmul(f, prefdir)
+    ! Reference preferred direction (orientation distribution is a material
+    ! property fixed in the reference configuration -> consistent tangent).
+    pd = prefdir
     pd_norm = sqrt(dot_product(pd, pd))
     if (pd_norm > ZERO) pd = pd / pd_norm
 
@@ -631,7 +679,7 @@ contains
             lambdaf = lambdai
           end if
 
-          call compute_bangle(angle, mfi, pd)
+          call compute_bangle(angle, m0i, pd)
           call orientation_density(rho, angle, b_orient, efi)
           call filament_force(fi, ffi, dwi, ddwi, lambdaf, lambda0, ll, r0_eff, mu0, beta, b0)
 
@@ -674,7 +722,7 @@ contains
             lambdaf = lambdai
           end if
 
-          call compute_bangle(angle, mfi, pd)
+          call compute_bangle(angle, m0i, pd)
           call orientation_density(rho, angle, b_orient, efi)
           call filament_force(fi, ffi, dwi, ddwi, lambdaf, lambda0, ll, r0_eff, mu0, beta, b0)
 
@@ -715,6 +763,7 @@ contains
                                sphere01_triangle_vertices_to_area, &
                                ICOS_POINT_NUM, ICOS_EDGE_NUM, ICOS_FACE_NUM, &
                                ICOS_FACE_ORDER_MAX
+    use mod_tensor, only: push2, push4
     real(dp), intent(out) :: sfic(3,3), cfic(3,3,3,3)
     real(dp), intent(in)  :: f(3,3), det
     real(dp), intent(in)  :: filprops(8), net_density, pp
@@ -726,15 +775,15 @@ contains
     integer  :: face_point(ICOS_FACE_ORDER_MAX, ICOS_FACE_NUM)
 
     real(dp) :: ll, r0, mu0, beta, b0, lambda0, r0c, etac, r0_eff
-    real(dp) :: coeff
     real(dp) :: a_xyz(3), b_xyz(3), c_xyz(3)
     real(dp) :: a2_xyz(3), b2_xyz(3), c2_xyz(3)
     real(dp) :: node_xyz(3), ai
     real(dp) :: mfi(3), m0i(3), lambdai, lambdaf
-    real(dp) :: h2(3,3), h4(3,3,3,3), hi(3,3), hhi(3,3,3,3)
-    real(dp) :: lambda_sum, area_total, lambda_eff
+    real(dp) :: h2m(3,3), h4m(3,3,3,3)
+    real(dp) :: dlam(3,3), d2lam(3,3,3,3)
+    real(dp) :: sfic_mat(3,3), cfic_mat(3,3,3,3)
+    real(dp) :: lambda_sum, area_total, lambda_eff, aval
     real(dp) :: fi, ffi, dw, ddw
-    real(dp) :: scale_s, scale_c1, scale_c2
     real(dp) :: aux_h, aux_hh
     integer  :: face, ia, ib, ic, f1, f2, f3
     integer  :: i, j, k, l
@@ -754,8 +803,24 @@ contains
       r0_eff = r0
     end if
 
-    h2 = ZERO
-    h4 = ZERO
+    ! Non-affine microsphere with p-root stretch averaging (Miehe-Goktepe-Lulei).
+    ! Psi = W(Lambda),  Lambda = ( <lambda^p> )^(1/p),  <.> = (1/A_tot) sum a_i (.).
+    ! The CONSISTENT stress/tangent are obtained in the MATERIAL frame from
+    ! Lambda = Lambda(Cbar) and then pushed forward (exactly like the verified
+    ! non-AI anisotropic path uses pk2_anisofic/cmat_anisofic + push2/push4).
+    ! Reference structure tensors (M0 = m0 (x) m0, lambda = |Fbar m0|):
+    !   A    = <lambda^p>                                          (scalar)
+    !   H2m  = dA/dCbar     = <(p/2) lambda^(p-2) M0>
+    !   H4m  = d2A/dCbar^2  = <(p/2)(p/2-1) lambda^(p-4) M0(x)M0>
+    !   dLam   = (1/p) A^(1/p-1) H2m
+    !   d2Lam  = (1/p)[ (1/p-1) A^(1/p-2) H2m(x)H2m + A^(1/p-1) H4m ]
+    !   Sfic_mat = 2 N dw  dLam
+    !   Cfic_mat = 4 N [ ddw dLam(x)dLam + dw d2Lam ]
+    ! NOTE: the OLD assembly built H2/H4 from the DEFORMED mfi with the wrong
+    ! power lambda^(p-2) directly in the spatial frame and a 2-term tangent; that
+    ! is neither the correct stress nor a consistent tangent (~36-44% FD error).
+    h2m = ZERO
+    h4m = ZERO
     lambda_sum = ZERO
     area_total = ZERO
 
@@ -791,16 +856,15 @@ contains
           lambda_sum = lambda_sum + (lambdai**pp) * ai
           area_total = area_total + ai
 
-          ! Structure tensors (hfilfic equivalent)
           if (lambdai > ZERO) then
-            aux_h  = (lambdai**(pp - TWO)) * ai
-            aux_hh = (pp - TWO) * (lambdai**(pp - FOUR)) * ai
+            aux_h  = (pp*HALF) * (lambdai**(pp - TWO)) * ai
+            aux_hh = (pp*HALF) * (pp*HALF - ONE) * (lambdai**(pp - FOUR)) * ai
             do i = 1, 3
               do j = 1, 3
-                h2(i,j) = h2(i,j) + aux_h * mfi(i) * mfi(j)
+                h2m(i,j) = h2m(i,j) + aux_h * m0i(i) * m0i(j)
                 do k = 1, 3
                   do l = 1, 3
-                    h4(i,j,k,l) = h4(i,j,k,l) + aux_hh * mfi(i)*mfi(j)*mfi(k)*mfi(l)
+                    h4m(i,j,k,l) = h4m(i,j,k,l) + aux_hh * m0i(i)*m0i(j)*m0i(k)*m0i(l)
                   end do
                 end do
               end do
@@ -829,14 +893,14 @@ contains
           area_total = area_total + ai
 
           if (lambdai > ZERO) then
-            aux_h  = (lambdai**(pp - TWO)) * ai
-            aux_hh = (pp - TWO) * (lambdai**(pp - FOUR)) * ai
+            aux_h  = (pp*HALF) * (lambdai**(pp - TWO)) * ai
+            aux_hh = (pp*HALF) * (pp*HALF - ONE) * (lambdai**(pp - FOUR)) * ai
             do i = 1, 3
               do j = 1, 3
-                h2(i,j) = h2(i,j) + aux_h * mfi(i) * mfi(j)
+                h2m(i,j) = h2m(i,j) + aux_h * m0i(i) * m0i(j)
                 do k = 1, 3
                   do l = 1, 3
-                    h4(i,j,k,l) = h4(i,j,k,l) + aux_hh * mfi(i)*mfi(j)*mfi(k)*mfi(l)
+                    h4m(i,j,k,l) = h4m(i,j,k,l) + aux_hh * m0i(i)*m0i(j)*m0i(k)*m0i(l)
                   end do
                 end do
               end do
@@ -846,30 +910,57 @@ contains
       end do
     end do
 
-    ! Effective stretch (normalized by total area)
-    lambda_sum = lambda_sum / area_total
-    lambda_eff = lambda_sum**(ONE / pp)
+    ! Area-normalize the accumulators:  A = <lambda^p>,  H2m, H4m
+    aval = lambda_sum / area_total
+    h2m  = h2m / area_total
+    h4m  = h4m / area_total
+
+    ! Effective stretch (C4 guard: avoid aval^(1/p) and negative-base powers if
+    ! the accumulator is non-positive — defensive; aval>0 for any valid F).
+    if (aval > ZERO) then
+      lambda_eff = aval**(ONE / pp)
+    else
+      lambda_eff = ONE
+    end if
 
     ! Evaluate single filament at effective stretch
     call filament_force(fi, ffi, dw, ddw, lambda_eff, lambda0, ll, r0_eff, mu0, beta, b0)
 
-    ! Assemble stress and stiffness
-    coeff    = net_density / det / area_total
-    scale_s  = coeff * dw * lambda_eff**(ONE - pp)
-    scale_c1 = coeff * dw * lambda_eff**(ONE - pp)
-    scale_c2 = coeff * (ddw * lambda_eff**(TWO*(ONE - pp)) &
-             - (pp - ONE) * dw * lambda_eff**(ONE - TWO*pp))
+    ! dLambda/dCbar and d2Lambda/dCbar^2
+    if (aval > ZERO) then
+      dlam = (ONE/pp) * aval**(ONE/pp - ONE) * h2m
+      do i = 1, 3
+        do j = 1, 3
+          do k = 1, 3
+            do l = 1, 3
+              d2lam(i,j,k,l) = (ONE/pp) * ( &
+                   (ONE/pp - ONE) * aval**(ONE/pp - TWO) * h2m(i,j)*h2m(k,l) &
+                 + aval**(ONE/pp - ONE) * h4m(i,j,k,l) )
+            end do
+          end do
+        end do
+      end do
+    else
+      dlam = ZERO
+      d2lam = ZERO
+    end if
 
-    sfic = scale_s * h2
+    ! Material fictitious 2-PK stress and elasticity (Psi = W(Lambda))
+    sfic_mat = TWO * net_density * dw * dlam
     do i = 1, 3
       do j = 1, 3
         do k = 1, 3
           do l = 1, 3
-            cfic(i,j,k,l) = scale_c1 * h4(i,j,k,l) + scale_c2 * h2(i,j)*h2(k,l)
+            cfic_mat(i,j,k,l) = FOUR * net_density * ( &
+                 ddw * dlam(i,j)*dlam(k,l) + dw * d2lam(i,j,k,l) )
           end do
         end do
       end do
     end do
+
+    ! Push-forward to the fictitious spatial frame (1/det handled by push2/push4)
+    call push2(sfic, sfic_mat, f, det)
+    call push4(cfic, cfic_mat, f, det)
 
   end subroutine nonaffine_network_ai
 
@@ -1017,7 +1108,7 @@ contains
     integer  :: face_order(ICOS_FACE_NUM)
     integer  :: face_point(ICOS_FACE_ORDER_MAX, ICOS_FACE_NUM)
 
-    real(dp) :: ll, r0, mu0, beta, b0, lambda0, r0c, etac, r0_eff
+    real(dp) :: ll, r0, mu0, beta, b0, lambda0, r0c, etac, r0_eff, chi
     real(dp) :: coeff
     real(dp) :: a_xyz(3), b_xyz(3), c_xyz(3)
     real(dp) :: a2_xyz(3), b2_xyz(3), c2_xyz(3)
@@ -1046,10 +1137,9 @@ contains
 
     coeff = net_density / det
 
-    ! Compute deformed preferred direction
-    pd = matmul(f, prefdir)
-    pd_norm = sqrt(dot_product(pd, pd))
-    if (pd_norm > ZERO) pd = pd / pd_norm
+    ! Reference preferred direction (deformation-independent density — keeps the
+    ! tangent consistent, as in affine_network; C5 Bug-2 fix applied here too).
+    pd = prefdir
 
     sfic = ZERO
     cfic = ZERO
@@ -1096,14 +1186,24 @@ contains
                                  ffmax_val, fric_val, frac, dtime)
           ru0(node_num) = ru_new
 
-          ! Orientation density
-          call compute_bangle(angle, mfi, pd)
+          ! Linker chain-rule (B6): dw/ddw are derivatives w.r.t. lambda_c=lambdaf+ru0;
+          ! convert to derivatives w.r.t. the macroscopic stretch (d lambdaf/d lambda
+          ! = chi) so the tangent matches filament_stress_fic, which uses the raw
+          ! stretch lambdai (as in affine_network).
+          if (etac > ZERO .and. etac < ONE) then
+            chi = etac * (r0_eff / r0)
+            dwi  = dwi  * chi
+            ddwi = ddwi * chi * chi
+          end if
+
+          ! Orientation density on the REFERENCE direction (deformation-independent).
+          call compute_bangle(angle, m0i, pd)
           call orientation_density(rho, angle, b_orient, efi)
 
           ! Only accumulate if contraction is active
           if (ru_new > ZERO) then
-            call filament_stress_fic(sfili, rho, lambdaf, dwi, mfi, ai)
-            call filament_stiffness_fic(cfili, rho, lambdaf, dwi, ddwi, mfi, ai)
+            call filament_stress_fic(sfili, rho, lambdai, dwi, mfi, ai)
+            call filament_stiffness_fic(cfili, rho, lambdai, dwi, ddwi, mfi, ai)
 
             do j = 1, 3
               do k = 1, 3
@@ -1145,12 +1245,18 @@ contains
                                  ffmax_val, fric_val, frac, dtime)
           ru0(node_num) = ru_new
 
-          call compute_bangle(angle, mfi, pd)
+          if (etac > ZERO .and. etac < ONE) then   ! linker chain-rule (B6)
+            chi = etac * (r0_eff / r0)
+            dwi  = dwi  * chi
+            ddwi = ddwi * chi * chi
+          end if
+
+          call compute_bangle(angle, m0i, pd)
           call orientation_density(rho, angle, b_orient, efi)
 
           if (ru_new > ZERO) then
-            call filament_stress_fic(sfili, rho, lambdaf, dwi, mfi, ai)
-            call filament_stiffness_fic(cfili, rho, lambdaf, dwi, ddwi, mfi, ai)
+            call filament_stress_fic(sfili, rho, lambdai, dwi, mfi, ai)
+            call filament_stiffness_fic(cfili, rho, lambdai, dwi, ddwi, mfi, ai)
 
             do j = 1, 3
               do k = 1, 3
