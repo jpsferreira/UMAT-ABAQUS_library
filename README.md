@@ -146,6 +146,37 @@ my_material/
     run.sh            ABAQUS submission script
 ```
 
+### User element (UEL) target
+
+Any material config can additionally be emitted as a **user element**: an
+8-node brick (U3) with full or reduced integration and the F-bar method of
+de Souza Neto (1996) against volumetric locking, with the material law driven
+through the same constitutive core as the UMAT (`material_uel` in
+`mod_material`). The UEL receives the bare spatial tangent plus the geometric
+term `a_ijkl = c_ijkl + δ_ik σ_jl` (the push-forward of ∂P/∂F that a
+displacement UEL's `Kuu = ∫ Gᵀ A G dv` assembly requires — *not* the
+Jaumann-corrected UMAT modulus), so Newton convergence is consistent.
+
+```bash
+uv run umat-generate --example neo_hooke --uel
+cd neo_hooke
+make run_uel                # standalone single-element driver, no ABAQUS
+cd abaqus && ./run_uel.sh   # ABAQUS UEL test (dummy mesh + UVARM for SDVs)
+```
+
+Configs may instead carry an `"element"` block:
+
+```json
+"element": {"nint": 8, "fbar": true, "num_elem": 1, "elem_offset": 1000}
+```
+
+`num_elem` must equal the number of UEL elements in the mesh and
+`elem_offset` the dummy-mesh element-number offset (both baked into
+`uel.f90` at generation). In the input deck, `*User Element` needs
+`Variables = nint × NSTATEV` and `Unsymm`; the generated `abaqus/uel_cube.inp`
+shows the full pattern. Element sources live in `src/element/`
+(ported from the standalone UEL-ABAQUS repository, which this supersedes).
+
 ### Running the standalone test
 
 ```bash
