@@ -13,27 +13,8 @@ module mod_hyperelastic
   implicit none
   private
   public :: sef_neo_hooke, sef_mooney_rivlin, sef_humphrey, sef_ogden
-  public :: n_params_iso
 
 contains
-
-  !> Return the number of material parameters expected for a given isotropic model type.
-  pure function n_params_iso(iso_type) result(n)
-    integer, intent(in) :: iso_type
-    integer :: n
-    select case (iso_type)
-    case (1) ! Neo-Hooke
-      n = 1
-    case (2) ! Mooney-Rivlin
-      n = 2
-    case (3) ! Ogden: first param is N_terms, then 2*N pairs
-      n = -1  ! variable, handled by caller
-    case (4) ! Humphrey
-      n = 2
-    case default
-      n = 0
-    end select
-  end function n_params_iso
 
   !> Neo-Hookean: W = C10 * (I1bar - 3)
   subroutine sef_neo_hooke(sseiso, diso, c10, cbari1, cbari2)
@@ -84,7 +65,7 @@ contains
     real(dp), intent(in)  :: params(:)
     integer,  intent(in)  :: nterms
 
-    real(dp) :: ps(3), an(3,3), ci1, ci2, cbari1, cbari2
+    real(dp) :: ps(3), an(3,3), cbari1, cbari2
     real(dp) :: check12, check13, check23, tol, mincheck
     real(dp) :: alpha, gamma, coef, aa, bb
     real(dp) :: dudi1, dudi2, d2ud2i1, d2dudi1di2, d2ud2i2
@@ -106,7 +87,9 @@ contains
     ! Ogden three-equal case variables
     real(dp) :: c10, c01, c11, c20, c02
 
-    call invariants(c, ci1, ci2)
+    ! Isochoric invariants of Cbar drive every branch below (the energy depends
+    ! only on the isochoric stretches). The all-equal branch previously used the
+    ! invariants of C, which scaled the isochoric response with J (B2).
     call invariants(cbar, cbari1, cbari2)
     call spectral(cbar, ps, an)
 
@@ -120,16 +103,15 @@ contains
       neig = 3
     else if (check12 < tol .or. check13 < tol .or. check23 < tol) then
       neig = 2
-      mincheck = check12
+      ! Pick the closest eigenvalue pair via argmin (order-independent; robust
+      ! regardless of how spectral() sorts the eigenvalues).
+      mincheck = min(check12, check13, check23)
       aa = (mincheck / TWO)**2
-      bb = (ps(1) + ps(2)) / TWO
-      if (check13 < mincheck) then
-        mincheck = check13
-        aa = (mincheck / TWO)**2
+      if (mincheck == check12) then
+        bb = (ps(1) + ps(2)) / TWO
+      else if (mincheck == check13) then
         bb = (ps(1) + ps(3)) / TWO
-      else if (check23 < mincheck) then
-        mincheck = check23
-        aa = (mincheck / TWO)**2
+      else
         bb = (ps(2) + ps(3)) / TWO
       end if
     else
@@ -292,17 +274,17 @@ contains
           sseiso = sseiso + coef*(ps(k1)**gamma - ONE)
         end do
         dudi1 = dudi1 + coef*gamma**2*( &
-          c10 + TWO*c20*(ci1 - THREE) &
-        + c11*((ci2 - THREE) - 0.125_dp*(ci1+ci2-6.0_dp)**2))
+          c10 + TWO*c20*(cbari1 - THREE) &
+        + c11*((cbari2 - THREE) - 0.125_dp*(cbari1+cbari2-6.0_dp)**2))
         dudi2 = dudi2 + coef*gamma**2*( &
-          c01 + TWO*c02*(ci2 - THREE) &
-        + c11*((ci1 - THREE) - 0.125_dp*(ci1+ci2-6.0_dp)**2))
+          c01 + TWO*c02*(cbari2 - THREE) &
+        + c11*((cbari1 - THREE) - 0.125_dp*(cbari1+cbari2-6.0_dp)**2))
         d2ud2i1 = d2ud2i1 + coef*gamma**2*( &
-          TWO*c20 - 0.25_dp*c11*(ci1+ci2-6.0_dp))
+          TWO*c20 - 0.25_dp*c11*(cbari1+cbari2-6.0_dp))
         d2ud2i2 = d2ud2i2 + coef*gamma**2*( &
-          TWO*c02 - 0.25_dp*c11*(ci1+ci2-6.0_dp))
+          TWO*c02 - 0.25_dp*c11*(cbari1+cbari2-6.0_dp))
         d2dudi1di2 = d2dudi1di2 + coef*gamma**2*( &
-          c11*(ONE - 0.25_dp*(ci1+ci2-6.0_dp)))
+          c11*(ONE - 0.25_dp*(cbari1+cbari2-6.0_dp)))
       end do
     end if
 

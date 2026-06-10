@@ -32,31 +32,59 @@ to combine through the ABAQUS `*USER MATERIAL` property array (PROPS).
 
 ### Anisotropic (ANISO_TYPE) — per fiber family
 
-| ID | Model            | Parameters per family                  | Count |
-|----|------------------|----------------------------------------|-------|
-| 0  | None             | —                                      | 0     |
-| 1  | HGO (dispersed)  | K1, K2, κ, fiber_x, fiber_y, fiber_z  | 6     |
-| 2  | Humphrey fiber   | K1, K2, fiber_x, fiber_y, fiber_z     | 5     |
+| ID | Model                       | Parameters per family                          | Count |
+|----|-----------------------------|------------------------------------------------|-------|
+| 0  | None                        | —                                              | 0     |
+| 1  | HGO (dispersed)             | K1, K2, κ, fiber_x, fiber_y, fiber_z           | 6     |
+| 2  | Humphrey fiber              | K1, K2, fiber_x, fiber_y, fiber_z              | 5     |
+| 3  | HGO — angular integration   | K1, K2, b_disp, factor, fiber_x, fiber_y, fiber_z | 7  |
+| 4  | Humphrey — angular integ.   | K1, K2, b_disp, factor, fiber_x, fiber_y, fiber_z | 7  |
+| 5  | Humphrey + activation       | K1, K2, fiber_x, fiber_y, fiber_z, T0M         | 6     |
+
+- IDs 3/4 integrate the fiber response over an icosahedral sphere: `factor` is the
+  integer refinement level and `b_disp` the von Mises fiber-dispersion concentration.
+- ID 5 adds an active (muscle) stress driven by the `PREDEF` field; `T0M` is the
+  maximum active fiber stress.
 
 ### Network (NETWORK_TYPE)
 
+All network models share an eight-element filament-property block
+`filprops = [L, R0F, μ0, β, B0, λ0, R0C, ETAC]`:
+
+- `L`   — filament contour length
+- `R0F` — filament end-to-end distance
+- `μ0`  — bending stiffness
+- `β`   — power-law exponent
+- `B0`  — thermal persistence parameter
+- `λ0`  — reference length density
+- `R0C` — crosslinker end-to-end distance
+- `ETAC` — crosslinker fraction (linkers active only when `0 < ETAC < 1`; set
+  `R0C = ETAC = 0` to disable). **Both values must always be present in PROPS**
+  because the reader always consumes them.
+
+`factor` = icosahedron refinement level (integer); factor=6 gives ~720 integration directions.
+`pdir`  = preferred direction (reference config) for the orientation-density function.
+
 **Quadrature-weight integration** (requires `sphere_intXXc.inp` loaded via UEXTERNALDB):
 
-| ID | Model       | Parameters                                               | Count |
-|----|-------------|----------------------------------------------------------|-------|
-| 0  | None        | —                                                        | 0     |
-| 1  | Affine      | PHI, N, B_orient, EFI, pdir_x, pdir_y, pdir_z, L, R0, μ0, β, B0, λ0 | 13 |
-| 2  | Non-affine  | PHI, N, B_orient, EFI, PP, L, R0, μ0, β, B0, λ0        | 11    |
+| ID | Model       | Parameters                                                  | Count |
+|----|-------------|-------------------------------------------------------------|-------|
+| 0  | None        | —                                                           | 0     |
+| 1  | Affine      | PHI, N, B_orient, EFI, pdir_x, pdir_y, pdir_z, filprops(8)  | 15    |
+| 2  | Non-affine  | PHI, N, B_orient, EFI, PP, pdir_x, pdir_y, pdir_z, filprops(8) | 16  |
 
 **Angular integration** (self-contained, no external files needed):
 
-| ID | Model            | Parameters                                                            | Count |
-|----|------------------|-----------------------------------------------------------------------|-------|
-| 5  | Affine-AI        | PHI, N, B_orient, EFI, factor, pdir_x, pdir_y, pdir_z, L, R0, μ0, β, B0, λ0 | 14 |
-| 6  | Non-affine-AI    | PHI, N, PP, factor, L, R0, μ0, β, B0, λ0                            | 10    |
+| ID | Model          | Parameters                                                              | Count |
+|----|----------------|-------------------------------------------------------------------------|-------|
+| 3  | Mixed-AI       | PHI, N_naff, PP, N_aff, B_orient, EFI, factor, pdir_x, pdir_y, pdir_z, filprops(8)      | 18    |
+| 4  | Contractile-AI | PHI, N, B_orient, EFI, FRIC, FFMAX, factor, pdir_x, pdir_y, pdir_z, filprops(8), KCH(7) | 25    |
+| 5  | Affine-AI      | PHI, N, B_orient, EFI, factor, pdir_x, pdir_y, pdir_z, filprops(8)                      | 16    |
+| 6  | Non-affine-AI  | PHI, N, PP, factor, filprops(8)                                                         | 12    |
 
-- `factor` = icosahedron refinement level (integer). factor=6 gives ~720 integration points.
-- `pdir` = preferred direction (reference config) for orientation density in affine models.
+`filprops(8)` denotes the eight filament properties listed above, packed in order.
+Counts are the exact number of values consumed by `umat_builder.f90`
+(`network_contribution`); they match `generate.py --list`.
 
 ### Damage (DAMAGE_TYPE)
 
@@ -172,37 +200,94 @@ NSTATEV = 3 + 9 = 12
 ### Example 8: Affine network with angular integration (no external files)
 
 ```
-*USER MATERIAL, CONSTANTS=21
+*USER MATERIAL, CONSTANTS=23
 ** KBULK, ISO, ANISO, NFIB, NET, DMG, NVISCO
   500.0,  0,  0,  0,  5,  0,  0,
 ** PHI, N, B_orient, EFI, factor, pdir_x, pdir_y, pdir_z
   0.5,  1.0e6,  2.0,  1.0,  6,  1.0,  0.0,  0.0,
-** L, R0, mu0, beta, B0, lambda0
-  1.0,  0.1,  0.01,  2.0,  0.1,  1.0
+** L, R0F, mu0, beta, B0, lambda0, R0C, ETAC
+  1.0,  0.1,  0.01,  2.0,  0.1,  1.0,  0.0,  0.0
 ```
 
 ### Example 9: Non-affine network with angular integration
 
 ```
-*USER MATERIAL, CONSTANTS=17
+*USER MATERIAL, CONSTANTS=19
 ** KBULK, ISO, ANISO, NFIB, NET, DMG, NVISCO
   500.0,  0,  0,  0,  6,  0,  0,
 ** PHI, N, PP, factor
   0.5,  1.0e6,  2.0,  6,
-** L, R0, mu0, beta, B0, lambda0
-  1.0,  0.1,  0.01,  2.0,  0.1,  1.0
+** L, R0F, mu0, beta, B0, lambda0, R0C, ETAC
+  1.0,  0.1,  0.01,  2.0,  0.1,  1.0,  0.0,  0.0
 ```
+
+### Example 10: Humphrey matrix + HGO fiber (angular integration, ANISO_TYPE=3)
+
+```
+*USER MATERIAL, CONSTANTS=16
+** KBULK, ISO, ANISO, NFIB, NET, DMG, NVISCO
+  500.0,  4,  3,  1,  0,  0,  0,
+** C10, C01 (Humphrey iso)
+  2.0,  1.5,
+** K1, K2, b_disp, factor, fiber_x, fiber_y, fiber_z
+  100.0,  10.0,  5.0,  6,  1.0,  0.0,  0.0
+```
+
+### Example 11: Humphrey matrix + Humphrey fiber with activation (ANISO_TYPE=5)
+
+```
+*USER MATERIAL, CONSTANTS=15
+** KBULK, ISO, ANISO, NFIB, NET, DMG, NVISCO
+  500.0,  4,  5,  1,  0,  0,  0,
+** C10, C01 (Humphrey iso)
+  2.0,  1.5,
+** K1, K2, fiber_x, fiber_y, fiber_z, T0M  (T0M = max active stress; ACT from PREDEF)
+  100.0,  10.0,  1.0,  0.0,  0.0,  50.0
+```
+
+### Example 12: Mixed network — affine + non-affine (angular integration, NETWORK_TYPE=3)
+
+```
+*USER MATERIAL, CONSTANTS=25
+** KBULK, ISO, ANISO, NFIB, NET, DMG, NVISCO
+  500.0,  0,  0,  0,  3,  0,  0,
+** PHI, N_naff, PP, N_aff, B_orient, EFI, factor, pdir_x, pdir_y, pdir_z
+  0.5,  5.0e5,  2.0,  5.0e5,  2.0,  1.0,  6,  1.0,  0.0,  0.0,
+** L, R0F, mu0, beta, B0, lambda0, R0C, ETAC
+  1.0,  0.1,  0.01,  2.0,  0.1,  1.0,  0.0,  0.0
+```
+
+### Example 13: Contractile network (angular integration, NETWORK_TYPE=4)
+
+```
+*USER MATERIAL, CONSTANTS=32
+** KBULK, ISO, ANISO, NFIB, NET, DMG, NVISCO
+  500.0,  0,  0,  0,  4,  0,  0,
+** PHI, N, B_orient, EFI, FRIC, FFMAX, factor, pdir_x, pdir_y, pdir_z
+  0.5,  0.2,  2.0,  1.0,  11.0,  11.0,  6,  1.0,  0.0,  0.0,
+** L, R0F, mu0, beta, B0, lambda0, R0C, ETAC
+  0.988,  0.804,  38600.0,  0.438,  0.065,  1.007,  0.014,  0.667,
+** KCH(1..7) chemical rate constants
+  1.0,  1.0,  1.0,  1.0,  1.0,  1.0,  1.0
+```
+
+NSTATEV = 1 + 4 + 20·factor² = 725 (factor = 6)
 
 ## State Variables (NSTATEV)
 
-| Range          | Content                                      |
-|----------------|----------------------------------------------|
-| 1              | Jacobian determinant J                       |
-| 2              | Damage variable d (if damage active)         |
-| 3              | Max historical SEF (if damage active)        |
-| 4 : 3+9×V     | Hidden stress tensors (V = number of branches)|
+| Range            | Content                                                        |
+|------------------|----------------------------------------------------------------|
+| 1                | Jacobian determinant J                                         |
+| 2                | Damage variable d (if damage active)                           |
+| 3                | Max historical SEF (if damage active)                          |
+| ... : +9×V       | Hidden stress tensors (V = N_VISCO branches)                   |
+| next 4           | Contractile chemical fractions FRAC(4) (if NETWORK_TYPE == 4)  |
+| next nwp         | Contractile sliding displacements RU0 (if NETWORK_TYPE == 4)   |
 
-Formula: `NSTATEV = 1 + (2 if damage) + (9 × N_VISCO)`
+Formula: `NSTATEV = 1 + (2 if damage) + (9 × N_VISCO) + (4 + nwp if NETWORK_TYPE == 4)`,
+where `nwp = 20 × factor²` (icosahedron integration points; factor=6 → 720).
+
+The blocks are laid out in this order: det, damage(2), viscous(9×V), contractile(4+nwp).
 
 ## Module Architecture
 

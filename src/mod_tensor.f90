@@ -138,10 +138,16 @@ contains
     real(dp), intent(in)  :: a(3,3)
     real(dp), intent(out) :: ainv(3,3)
     real(dp) :: det
+    real(dp), parameter :: TINY_DET = 1.0e-30_dp
 
     det = a(1,1)*(a(2,2)*a(3,3) - a(2,3)*a(3,2)) &
         - a(1,2)*(a(2,1)*a(3,3) - a(2,3)*a(3,1)) &
         + a(1,3)*(a(2,1)*a(3,2) - a(2,2)*a(3,1))
+
+    ! Guard a (near-)singular matrix so the division yields a large finite number
+    ! rather than Inf/NaN. In normal use C, U are invertible (det(F) > 0 is
+    ! enforced in umat); this is defensive for pathological inputs.
+    if (abs(det) < TINY_DET) det = sign(TINY_DET, det)
 
     ainv(1,1) =  (a(2,2)*a(3,3) - a(2,3)*a(3,2)) / det
     ainv(1,2) = -(a(1,2)*a(3,3) - a(1,3)*a(3,2)) / det

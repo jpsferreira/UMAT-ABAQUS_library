@@ -14,7 +14,7 @@ subroutine uexternaldb(lop, lrestart, time, dtime, kstep, kinc)
   include 'aba_param.inc'
 
   integer, intent(in out) :: lop, lrestart, kstep, kinc
-  real,    intent(in out) :: time(2)
+  real(8), intent(in out) :: time(2)   ! double precision: matches ABAQUS (aba_param.inc) and callers
   real(8), intent(in out) :: dtime
 
   ! Maximum quadrature points (must match umat_builder network_contribution)
