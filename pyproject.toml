@@ -3,9 +3,9 @@ requires = ["setuptools>=64"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "umat-abaqus-library"
+name = "abaqus-material-lab"
 version = "0.1.0"
-description = "Generator for self-contained ABAQUS UMAT material law directories"
+description = "Generator for self-contained ABAQUS material laws — UMAT subroutines and UEL user elements"
 requires-python = ">=3.8"
 license = "MIT"
 dependencies = ["numpy"]

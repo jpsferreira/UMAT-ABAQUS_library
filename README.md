@@ -1,6 +1,6 @@
-# UMAT-ABAQUS Library
+# ABAQUS Material Lab
 
-A composable UMAT framework for finite-strain constitutive modelling of soft biological tissues and filamentous networks in ABAQUS.
+A composable framework for finite-strain constitutive modelling of soft biological tissues and filamentous networks in ABAQUS. One constitutive core emits both `UMAT` material subroutines (for built-in elements) and `UEL` user elements.
 
 ## What this repository does
 
