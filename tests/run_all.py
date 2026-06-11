@@ -8,6 +8,8 @@
   T6  network_check   - filament-network battery (smoke, RW quadrature, tangents)
   T7  recombination_check - visco x damage x network x AI-aniso recombination
   T8  robustness_check - no-NaN / graceful cutback on element inversion
+  T9  uel_tangent_check - UEL assembly tangent a = c + δ⊗σ vs FD of dP/dF
+  T10 uel_check        - generated UEL: traction oracle vs UMAT + AMATRX vs FD(RHS)
   B6  contractile_tangent_check - contractile consistent tangent (evolve-then-perturb)
 
 Exit code is nonzero if any 'good'/invariant check fails. Checks tagged as
@@ -28,6 +30,8 @@ import doc_consistency
 import network_check
 import recombination_check
 import robustness_check
+import uel_tangent_check
+import uel_check
 import contractile_tangent_check
 
 
@@ -41,6 +45,8 @@ def main():
                       ("T6 network", network_check),
                       ("T7 recombination", recombination_check),
                       ("T8 robustness", robustness_check),
+                      ("T9 uel-tangent", uel_tangent_check),
+                      ("T10 uel-element", uel_check),
                       ("B6 contractile-tangent", contractile_tangent_check)):
         print("=" * 70)
         print(name)

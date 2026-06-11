@@ -20,7 +20,7 @@ module mod_continuum
   public :: pk2_anisofic, cmat_anisofic
 
   ! Jaumann rate
-  public :: set_jr
+  public :: set_jr, set_geometric
 
   ! Voigt indexing
   public :: indexx
@@ -333,6 +333,30 @@ contains
       end do
     end do
   end subroutine set_jr
+
+  !> Geometric (initial-stress) contribution for the UEL spatial tangent.
+  !>
+  !> The displacement-based UEL assembles Kuu = ∫ Gᵀ·A·G dv with
+  !>   a_ijkl = (1/J) F_jJ F_lL ∂P_iJ/∂F_kL = c_ijkl + δ_ik σ_jl,
+  !> i.e. the push-forward of the first elasticity tensor. The geometric term
+  !> δ_ik σ_jl is NOT the Jaumann correction set_jr builds for ABAQUS UMATs
+  !> (that one is its full symmetrization); a_ijkl has no minor symmetry,
+  !> which is why the element is declared Unsymm.
+  subroutine set_geometric(cgeo, sigma, unit2)
+    real(dp), intent(out) :: cgeo(3,3,3,3)
+    real(dp), intent(in)  :: sigma(3,3), unit2(3,3)
+    integer :: i, j, k, l
+
+    do i = 1, 3
+      do j = 1, 3
+        do k = 1, 3
+          do l = 1, 3
+            cgeo(i,j,k,l) = unit2(i,k) * sigma(j,l)
+          end do
+        end do
+      end do
+    end do
+  end subroutine set_geometric
 
   ! ============================================================================
   ! VOIGT INDEXING (ABAQUS INTERFACE)

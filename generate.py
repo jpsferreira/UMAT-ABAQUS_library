@@ -32,6 +32,23 @@ SOURCE_FILES = [
     "uexternaldb.f90",
 ]
 
+# Element-layer sources appended after SOURCE_FILES when emitting uel.f90
+UEL_SOURCE_FILES = [
+    "element/mod_uel_config.f90",
+    "element/mod_uel_shape.f90",
+    "element/mod_uel_element.f90",
+    "element/uel_entry.f90",
+]
+
+# Defaults for the optional "element" config block (UEL emission)
+DEFAULT_ELEMENT = {
+    "type": "u3d8",      # 8-node brick (only type currently)
+    "nint": 8,           # volume integration points (1 or 8)
+    "fbar": True,        # F-bar locking treatment (active on the 8-pt brick)
+    "num_elem": 1,       # UEL elements in the real mesh (sizes globalSdv)
+    "elem_offset": 1000, # dummy-mesh element-number offset (must match deck)
+}
+
 # --- Example configurations ---------------------------------------------------
 
 EXAMPLES = {
@@ -353,6 +370,301 @@ def generate_aba_param(outdir):
     (outdir / "aba_param.inc").write_text(src.read_text())
 
 
+# --- UEL emission ---------------------------------------------------------
+
+def element_cfg(cfg):
+    """Merged element block (or None if UEL emission is not requested)."""
+    if "element" not in cfg:
+        return None
+    elem = dict(DEFAULT_ELEMENT)
+    elem.update(cfg["element"] or {})
+    return elem
+
+
+def subst_uel_config(text, elem):
+    """Rewrite the parameter values in mod_uel_config.f90 from the element block."""
+    import re
+    text = re.sub(r"(numElem\s*=\s*)\d+", rf"\g<1>{elem['num_elem']}", text)
+    text = re.sub(r"(ElemOffset\s*=\s*)\d+", rf"\g<1>{elem['elem_offset']}", text)
+    fbar = ".true." if elem["fbar"] else ".false."
+    text = re.sub(r"(use_fbar\s*=\s*)\.\w+\.", rf"\g<1>{fbar}", text)
+    text = re.sub(r"(nIntPt\s*=\s*)\d+", rf"\g<1>{elem['nint']}", text)
+    return text
+
+
+def uel_source(elem):
+    """Concatenated uel.f90 text: material modules + element layer."""
+    parts = []
+    for src in SOURCE_FILES + UEL_SOURCE_FILES:
+        text = (SRC_DIR / src).read_text()
+        if src.endswith("mod_uel_config.f90"):
+            text = subst_uel_config(text, elem)
+        parts.append(f"! {'='*72}\n! SOURCE: {src}\n! {'='*72}\n" + text)
+    return ("! Auto-generated UEL (user element + material library) — do not edit.\n"
+            "! Regenerate with: python generate.py <config.json>\n\n"
+            + "\n\n".join(parts) + "\n")
+
+
+def generate_uel_f90(outdir, cfg, elem):
+    (outdir / "uel.f90").write_text(uel_source(elem))
+
+
+# Unit-cube nodes in the element's local ordering (sketch in mod_uel_element):
+# bottom face z=0: 1(0,0,0) 2(1,0,0) 3(1,1,0) 4(0,1,0); top face z=1: 5..8
+UEL_CUBE_COORDS = [
+    (0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (1.0, 1.0, 0.0), (0.0, 1.0, 0.0),
+    (0.0, 0.0, 1.0), (1.0, 0.0, 1.0), (1.0, 1.0, 1.0), (0.0, 1.0, 1.0),
+]
+
+
+def generate_uel_test_driver(outdir, cfg, elem):
+    """Standalone single-element driver: ramps the unit cube through affine
+    deformation histories (same load cases as test_umat) and records the
+    internal force on the x+ face (nodes 2,3,6,7)."""
+    props = build_props(cfg)
+    nprops = len(props)
+    nstatev = compute_nstatev(cfg)
+    nint = elem["nint"]
+    test = cfg.get("test", {})
+    stretch_max = test.get("stretch_max", 1.5)
+    gamma_max = test.get("gamma_max", 0.6)
+    nsteps = test.get("nsteps", 400)
+    dtime = test.get("dtime", 0.01)
+
+    coords_lines = "\n".join(
+        f"  coords(1,{i+1}) = {x:.1f}d0; coords(2,{i+1}) = {y:.1f}d0; coords(3,{i+1}) = {z:.1f}d0"
+        for i, (x, y, z) in enumerate(UEL_CUBE_COORDS))
+
+    code = f"""\
+! Auto-generated UEL test driver for material: {cfg["name"]}
+! Drives one U3D8 element through affine deformation ramps (no ABAQUS).
+! Output columns: step time, control parameter, x+ face force (fx, fy, fz).
+program test_uel
+  implicit none
+
+  integer, parameter :: nnode = 8, ndofel = 24, mlvarx = 24, nrhs = 1
+  integer, parameter :: nprops = {nprops}, nsdv = {nstatev}, nintp = {nint}
+  integer, parameter :: nsvars = nintp*nsdv, njprop = 2
+  integer, parameter :: mcrd = 3, jtype = 3, jelem = 1
+  integer, parameter :: ndload = 0, mdload = 1, npredf = 1
+
+  double precision :: rhs(mlvarx,1), amatrx(ndofel,ndofel), svars(nsvars)
+  double precision :: energy(8), props(nprops), coords(mcrd,nnode)
+  double precision :: u(ndofel), du(mlvarx,1), v(ndofel), a(ndofel)
+  double precision :: time(2), dtime, params(1)
+  double precision :: adlmag(mdload,1), ddlmag(mdload,1)
+  double precision :: predef(2,npredf,nnode), pnewdt, period
+  integer :: jdltyp(mdload,1), lflags(4), jprops(njprop)
+
+  double precision :: Ftar(3,3)
+  double precision :: stretch_max, gamma_max
+  integer :: nsteps
+  double precision, parameter :: zero = 0.0d0, one = 1.0d0
+
+  ! --- Element/material setup ---
+{fmt_props_fortran(props)}
+  jprops(1) = nsdv   ! local SDVs per integration point
+  jprops(2) = nsdv   ! global SDVs per integration point (UVARM)
+  lflags = 0
+  lflags(1) = 1      ! static general step
+  lflags(2) = 1      ! nlgeom=yes
+  dtime = {dtime}d0
+  nsteps = {nsteps}
+  stretch_max = {stretch_max}d0
+  gamma_max = {gamma_max}d0
+  v = zero; a = zero; params = zero; energy = zero
+  adlmag = zero; ddlmag = zero; predef = zero; jdltyp = 0
+  period = zero
+
+{coords_lines}
+
+  time = zero
+  call uexternaldb(0, 0, time, zero, 0, 0)
+  call execute_command_line('mkdir -p results')
+
+  ! Uniaxial: F = diag(s, 1/sqrt(s), 1/sqrt(s))
+  Ftar = zero
+  Ftar(1,1) = stretch_max
+  Ftar(2,2) = one/sqrt(stretch_max); Ftar(3,3) = one/sqrt(stretch_max)
+  call run_case(Ftar, 'results/uel_uniaxial.dat', 'Uniaxial ')
+
+  ! Biaxial: F = diag(s, s, 1/s^2)
+  Ftar = zero
+  Ftar(1,1) = stretch_max; Ftar(2,2) = stretch_max
+  Ftar(3,3) = one/(stretch_max*stretch_max)
+  call run_case(Ftar, 'results/uel_biaxial.dat', 'Biaxial  ')
+
+  ! Pure shear: F12 = F21 = gamma
+  Ftar = zero; Ftar(1,1) = one; Ftar(2,2) = one; Ftar(3,3) = one
+  Ftar(1,2) = gamma_max; Ftar(2,1) = gamma_max
+  call run_case(Ftar, 'results/uel_shear.dat', 'Shear    ')
+
+  ! Simple shear: F12 = gamma
+  Ftar = zero; Ftar(1,1) = one; Ftar(2,2) = one; Ftar(3,3) = one
+  Ftar(1,2) = gamma_max
+  call run_case(Ftar, 'results/uel_simple_shear.dat', 'Simple sh')
+
+contains
+
+  !> Ramp the element from I to Ftar in nsteps affine increments,
+  !> carrying svars (state) across increments.
+  subroutine run_case(Ft, fname, label)
+    double precision, intent(in) :: Ft(3,3)
+    character(*), intent(in) :: fname, label
+    double precision :: F(3,3), uold(ndofel), fface(3), s
+    integer :: i, n, k, kk, face_nodes(4)
+
+    face_nodes = (/2, 3, 6, 7/)   ! x+ face (X=1)
+    svars = zero; u = zero; uold = zero; time = zero
+    pnewdt = one
+
+    open(unit=21, file=fname, status='replace')
+    do i = 1, nsteps
+      s = dble(i)/dble(nsteps)
+      F = identity3() + s*(Ft - identity3())
+      ! Affine nodal displacements u_a = (F - I) X_a
+      do n = 1, nnode
+        do k = 1, 3
+          u(3*(n-1)+k) = sum((F(k,:) - identity_row(k))*coords(:,n))
+        end do
+      end do
+      du(:,1) = u - uold
+      rhs = zero; amatrx = zero
+      call uel(rhs, amatrx, svars, energy, ndofel, nrhs, nsvars, &
+               props, nprops, coords, mcrd, nnode, u, du, v, a, jtype, &
+               time, dtime, 1, i, jelem, params, ndload, jdltyp, adlmag, &
+               predef, npredf, lflags, mlvarx, ddlmag, mdload, pnewdt, &
+               jprops, njprop, period)
+      ! Internal force on the x+ face: f = -sum(RHS) over face nodes
+      fface = zero
+      do kk = 1, 4
+        n = face_nodes(kk)
+        do k = 1, 3
+          fface(k) = fface(k) - rhs(3*(n-1)+k, 1)
+        end do
+      end do
+      write(21, '(5ES20.10)') time(1), s, fface(1), fface(2), fface(3)
+      time(1) = time(1) + dtime
+      uold = u
+    end do
+    close(21)
+    write(*,'(A,A,A)') label, ' -> ', fname
+  end subroutine run_case
+
+  pure function identity3() result(iden)
+    double precision :: iden(3,3)
+    integer :: ii
+    iden = 0.0d0
+    do ii = 1, 3
+      iden(ii,ii) = 1.0d0
+    end do
+  end function identity3
+
+  pure function identity_row(k) result(row)
+    integer, intent(in) :: k
+    double precision :: row(3)
+    row = 0.0d0
+    row(k) = 1.0d0
+  end function identity_row
+
+end program test_uel
+
+! Stub for ABAQUS-provided routine (standalone builds only)
+subroutine getoutdir(outdir, lenoutdir)
+  implicit none
+  character(len=256), intent(out) :: outdir
+  integer, intent(out) :: lenoutdir
+  outdir = '.'
+  lenoutdir = 1
+end subroutine getoutdir
+"""
+    (outdir / "test_uel.f90").write_text(code)
+
+
+def generate_uel_abaqus(outdir, cfg, elem):
+    """ABAQUS single-element UEL deck: U3 real mesh + dummy mesh for UVARM
+    visualization. Reuses the bcs_*.inp files written by generate_abaqus_dir
+    (same node numbering and node sets)."""
+    abq = outdir / "abaqus"
+    abq.mkdir(exist_ok=True)
+
+    props = build_props(cfg)
+    nprops = len(props)
+    nstatev = compute_nstatev(cfg)
+    nvars = elem["nint"] * nstatev
+    offset = elem["elem_offset"]
+    dummy_type = "C3D8" if elem["nint"] == 8 else "C3D8R"
+
+    # *UEL PROPERTY data: reals first, the two integer properties last
+    uel_props = fmt_props_abaqus(list(props) + [nstatev, nstatev])
+
+    deck = f"""\
+*Heading
+UEL single-element test — {cfg["name"]}
+** Real mesh: user element U3 (8-node brick, F-bar={'on' if elem['fbar'] else 'off'}, {elem['nint']}-pt)
+** Dummy mesh: {dummy_type} at element offset {offset}, carries UVARM output
+*Node, nset=all_nodes
+      1,           1.,           1.,           1.
+      2,           1.,           0.,           1.
+      3,           1.,           1.,           0.
+      4,           1.,           0.,           0.
+      5,           0.,           1.,           1.
+      6,           0.,           0.,           1.
+      7,           0.,           1.,           0.
+      8,           0.,           0.,           0.
+*User Element, type=U3, nodes=8, coordinates=3, properties={nprops}, iproperties=2, variables={nvars}, unsymm
+1,2,3
+*Element, type=U3, elset=main_element
+1, 5, 6, 8, 7, 1, 2, 4, 3
+*Element, type={dummy_type}, elset=dummy_mesh
+{1 + offset}, 5, 6, 8, 7, 1, 2, 4, 3
+*Nset, nset=Set-1, generate
+ 2,  8,  2
+*Nset, nset=Set-2, generate
+ 1,  7,  2
+*Nset, nset=Set-3
+ 1, 2, 5, 6
+*Nset, nset=Set-4, generate
+ 5,  8,  1
+*Nset, nset=Set-5
+ 2, 4, 6, 8
+*Nset, nset=Set-6
+ 3, 4, 7, 8
+*Nset, nset=Set-7, generate
+ 1, 4, 1
+*Uel Property, elset=main_element
+{uel_props}
+*Solid Section, elset=dummy_mesh, material=dummy_material
+*Material, name=dummy_material
+*User output variables
+{nstatev},
+*Elastic
+1.e-20
+*Step, name=static, nlgeom=YES, unsymm=YES, inc=200
+*Static
+0.01, 1., 1e-05, 0.1
+*INCLUDE, file=bcs_uni.inp
+*OUTPUT,FIELD,VARIABLE=PRESELECT,FREQ=1
+*ELEMENT OUTPUT, elset=dummy_mesh
+UVARM
+*OUTPUT,HISTORY,VARIABLE=PRESELECT,FREQ=1
+*End Step
+"""
+    (abq / "uel_cube.inp").write_text(deck)
+
+    run_sh = """\
+#!/bin/bash
+# Run ABAQUS single-element UEL test
+# Usage: ./run_uel.sh [bcs_file]
+BCS=${1:-bcs_uni.inp}
+sed -i "s/INCLUDE, file=bcs_.*/INCLUDE, file=${BCS}/" uel_cube.inp
+abaqus job=uel_cube user=../uel.f90 interactive
+"""
+    run_path = abq / "run_uel.sh"
+    run_path.write_text(run_sh)
+    run_path.chmod(run_path.stat().st_mode | stat.S_IEXEC)
+
+
 def generate_test_driver(outdir, cfg):
     props = build_props(cfg)
     nprops = len(props)
@@ -507,21 +819,31 @@ end subroutine getoutdir
     (outdir / "test_umat.f90").write_text(code)
 
 
-def generate_makefile(outdir):
-    mk = """\
+def generate_makefile(outdir, elem=None):
+    uel_all = " test_uel" if elem else ""
+    mk = f"""\
 FC      = gfortran
 FFLAGS  = -O2 -ffree-form
 
-all: test_umat
+all: test_umat{uel_all}
 
 test_umat: umat.f90 test_umat.f90
 \t$(FC) $(FFLAGS) -o $@ $^
 
 run: test_umat
 \t./test_umat
+"""
+    if elem:
+        mk += """
+test_uel: uel.f90 test_uel.f90
+\t$(FC) $(FFLAGS) -o $@ $^
 
+run_uel: test_uel
+\t./test_uel
+"""
+    mk += """
 clean:
-\trm -f test_umat *.mod
+\trm -f test_umat test_uel *.mod
 \trm -rf results
 """
     (outdir / "Makefile").write_text(mk)
@@ -743,12 +1065,18 @@ def generate(cfg):
     outdir = SCRIPT_DIR / name
     outdir.mkdir(exist_ok=True)
 
+    elem = element_cfg(cfg)
+
     generate_umat_f90(outdir)
     generate_aba_param(outdir)
     generate_test_driver(outdir, cfg)
-    generate_makefile(outdir)
+    generate_makefile(outdir, elem)
     generate_abaqus_dir(outdir, cfg)
     generate_quadrature(outdir, cfg)
+    if elem:
+        generate_uel_f90(outdir, cfg, elem)
+        generate_uel_test_driver(outdir, cfg, elem)
+        generate_uel_abaqus(outdir, cfg, elem)
 
     # Save the config for reproducibility
     (outdir / "config.json").write_text(json.dumps(cfg, indent=2) + "\n")
@@ -769,7 +1097,16 @@ def generate(cfg):
     print(f"    bcs_bi.inp      Biaxial boundary conditions")
     print(f"    bcs_sh.inp      Shear boundary conditions")
     print(f"    run.sh          ABAQUS submission script")
+    if elem:
+        nvars = elem["nint"] * nstatev
+        print(f"  uel.f90           User element + material library "
+              f"(U3, {elem['nint']}-pt, F-bar={'on' if elem['fbar'] else 'off'}, Variables={nvars})")
+        print(f"  test_uel.f90      Standalone single-element driver")
+        print(f"    abaqus/uel_cube.inp + run_uel.sh   ABAQUS UEL test")
+
     print(f"\nStandalone test:  cd {name} && make run")
+    if elem:
+        print(f"UEL test:         cd {name} && make run_uel")
     print(f"ABAQUS test:      cd {name}/abaqus && ./run.sh")
 
 
@@ -781,6 +1118,10 @@ def main():
     parser.add_argument("--example", metavar="NAME",
                         help="Generate from built-in example: " + ", ".join(EXAMPLES.keys()))
     parser.add_argument("--list", action="store_true", help="List available model types")
+    parser.add_argument("--uel", action="store_true",
+                        help="Also emit a user element (uel.f90 + test_uel.f90 + ABAQUS "
+                             "UEL deck) driven by this material; configs may instead "
+                             "carry an explicit \"element\" block")
     args = parser.parse_args()
 
     if args.list:
@@ -792,13 +1133,17 @@ def main():
             print(f"Unknown example: {args.example}")
             print(f"Available: {', '.join(EXAMPLES.keys())}")
             sys.exit(1)
-        cfg = EXAMPLES[args.example]
+        cfg = dict(EXAMPLES[args.example])
+        if args.uel:
+            cfg.setdefault("element", {})
         generate(cfg)
         return
 
     if args.config:
         with open(args.config) as f:
             cfg = json.load(f)
+        if args.uel:
+            cfg.setdefault("element", {})
         generate(cfg)
         return
 
